@@ -1,13 +1,15 @@
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Wallet, Menu } from "lucide-react";
+import { Moon, Sun, Wallet, Menu, LogOut, User } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { useWallet } from "@/hooks/useWallet";
+import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 export function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const { isConnected, account, connectWallet, isLoading } = useWallet();
+  const { user, isAuthenticated, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
@@ -23,20 +25,64 @@ export function Navbar() {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-6">
-          <a href="/events" className="text-foreground/80 hover:text-foreground transition-colors">
-            Events
-          </a>
-          <a href="#organize" className="text-foreground/80 hover:text-foreground transition-colors">
-            Organize
-          </a>
-          <a href="/profile" className="text-foreground/80 hover:text-foreground transition-colors">
-            Profile
-          </a>
+          {isAuthenticated ? (
+            <>
+              <Link to="/events" className="text-foreground/80 hover:text-foreground transition-colors">
+                Events
+              </Link>
+              <Link to="/organize" className="text-foreground/80 hover:text-foreground transition-colors">
+                Organize
+              </Link>
+            </>
+          ) : null}
         </div>
 
         {/* Actions */}
         <div className="flex items-center space-x-2">
-          {/* Theme Toggle */}
+          {isAuthenticated ? (
+            <>
+              {/* User Profile */}
+              <Button variant="ghost" size="icon" asChild>
+                <Link to="/profile">
+                  <User className="h-4 w-4" />
+                </Link>
+              </Button>
+
+              {/* Logout */}
+              <Button 
+                variant="outline" 
+                onClick={logout}
+                className="hidden sm:flex items-center space-x-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </Button>
+            </>
+          ) : (
+            <>
+              {/* Login Button */}
+              <Button variant="outline" asChild>
+                <Link to="/login">Login</Link>
+              </Button>
+
+              {/* Signup Button */}
+              <Button asChild>
+                <Link to="/signup">Sign Up</Link>
+              </Button>
+            </>
+          )}
+
+          {/* Mobile Menu */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+
+          {/* Theme Toggle - Moved to the end */}
           <Button
             variant="ghost"
             size="icon"
@@ -49,29 +95,6 @@ export function Navbar() {
               <Sun className="h-4 w-4" />
             )}
           </Button>
-
-          {/* Connect Wallet */}
-          <Button 
-            variant="outline" 
-            className="hidden sm:flex items-center space-x-2"
-            onClick={connectWallet}
-            disabled={isLoading}
-          >
-            <Wallet className="h-4 w-4" />
-            <span>
-              {isLoading ? "Connecting..." : isConnected ? `${account?.slice(0, 6)}...${account?.slice(-4)}` : "Connect"}
-            </span>
-          </Button>
-
-          {/* Mobile Menu */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
@@ -79,24 +102,33 @@ export function Navbar() {
       {isMenuOpen && (
         <div className="md:hidden border-t bg-background/95 backdrop-blur">
           <div className="container py-4 space-y-2">
-            <a href="/events" className="block py-2 text-foreground/80 hover:text-foreground">
-              Events
-            </a>
-            <a href="#organize" className="block py-2 text-foreground/80 hover:text-foreground">
-              Organize
-            </a>
-            <a href="/profile" className="block py-2 text-foreground/80 hover:text-foreground">
-              Profile
-            </a>
-            <Button 
-              variant="outline" 
-              className="w-full mt-4"
-              onClick={connectWallet}
-              disabled={isLoading}
-            >
-              <Wallet className="h-4 w-4 mr-2" />
-              {isLoading ? "Connecting..." : isConnected ? `${account?.slice(0, 6)}...${account?.slice(-4)}` : "Connect Wallet"}
-            </Button>
+            {isAuthenticated ? (
+              <>
+                <Link to="/events" className="block py-2 text-foreground/80 hover:text-foreground">
+                  Events
+                </Link>
+                <Link to="/organize" className="block py-2 text-foreground/80 hover:text-foreground">
+                  Organize
+                </Link>
+                <Button 
+                  variant="outline" 
+                  className="w-full mt-4"
+                  onClick={logout}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="block py-2 text-foreground/80 hover:text-foreground">
+                  Login
+                </Link>
+                <Link to="/signup" className="block py-2 text-foreground/80 hover:text-foreground">
+                  Sign Up
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

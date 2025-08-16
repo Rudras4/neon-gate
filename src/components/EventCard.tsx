@@ -87,20 +87,24 @@ export function EventCard({
           </div>
           <div className="flex items-center space-x-2 text-muted-foreground">
             <Users className="h-4 w-4" />
-            <span>{attendees}/{maxAttendees} attending</span>
+            <span>{attendees > 0 ? `${attendees}/${maxAttendees}` : `${maxAttendees} capacity`} {attendees > 0 ? 'attending' : 'available'}</span>
           </div>
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t">
           <div>
             <span className="text-2xl font-bold text-primary">{price}</span>
-            <span className="text-muted-foreground text-sm ml-1">AVAX</span>
+            <span className="text-muted-foreground text-sm ml-1">₹</span>
           </div>
-          <a href="/events/1">
-            <Button className="btn-hero">
-              Buy Ticket
-            </Button>
-          </a>
+          <Button 
+            className="btn-hero"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/events/${id}`);
+            }}
+          >
+            Buy Ticket
+          </Button>
         </div>
       </div>
     </div>

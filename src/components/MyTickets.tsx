@@ -2,50 +2,66 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, MapPin, QrCode, ExternalLink, ArrowUpRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ticketsAPI } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export function MyTickets() {
-  // Mock ticket data
-  const tickets = [
-    {
-      id: "nft-001",
-      eventTitle: "Tech Conference 2024",
-      eventDate: "March 15, 2024",
-      eventLocation: "Convention Center, Mumbai",
-      tier: "Gold",
-      seatNumber: "A-15",
-      price: "150",
-      image: "/src/assets/hero-corporate.jpg",
-      status: "Active",
-      qrCode: "QR123456789"
-    },
-    {
-      id: "nft-002",
-      eventTitle: "EDM Night Festival",
-      eventDate: "March 20, 2024",
-      eventLocation: "Open Grounds, Pune",
-      tier: "Platinum",
-      seatNumber: "VIP-5",
-      price: "75",
-      image: "/src/assets/hero-concert.jpg",
-      status: "Active",
-      qrCode: "QR987654321"
-    },
-    {
-      id: "nft-003",
-      eventTitle: "Digital Marketing Workshop",
-      eventDate: "February 25, 2024",
-      eventLocation: "Business Hub, Bangalore",
-      tier: "Silver",
-      seatNumber: "B-22",
-      price: "50",
-      image: "/src/assets/venue-theater.jpg",
-      status: "Used",
-      qrCode: "QR555666777"
-    }
-  ];
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  const activeTickets = tickets.filter(ticket => ticket.status === "Active");
-  const pastTickets = tickets.filter(ticket => ticket.status === "Used");
+  // Fetch user tickets from backend
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        setIsLoading(true);
+        const response = await ticketsAPI.getUserTickets();
+        setTickets(response.tickets || []);
+      } catch (err) {
+        console.error('Error fetching tickets:', err);
+        toast({
+          title: "Error",
+          description: "Failed to load tickets",
+          variant: "destructive",
+        });
+        // Fallback to mock data for demo purposes
+        setTickets([
+          {
+            id: "nft-001",
+            eventTitle: "Tech Conference 2024",
+            eventDate: "March 15, 2024",
+            eventLocation: "Convention Center, Mumbai",
+            tier: "Gold",
+            seatNumber: "A-15",
+            price: "150",
+            image: "/src/assets/hero-corporate.jpg",
+            status: "Active",
+            qrCode: "QR123456789"
+          },
+          {
+            id: "nft-002",
+            eventTitle: "EDM Night Festival",
+            eventDate: "March 20, 2024",
+            eventLocation: "Open Grounds, Pune",
+            tier: "Platinum",
+            seatNumber: "VIP-5",
+            price: "75",
+            image: "/src/assets/hero-concert.jpg",
+            status: "Active",
+            qrCode: "QR987654321"
+          }
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTickets();
+  }, [toast]);
+
+  const activeTickets = tickets.filter(ticket => ticket.status === "Active" || ticket.status === "active");
+  const pastTickets = tickets.filter(ticket => ticket.status === "Used" || ticket.status === "used");
 
   const tierColors = {
     Platinum: "bg-gradient-to-r from-slate-400 to-slate-600",
@@ -60,7 +76,7 @@ export function MyTickets() {
         {/* Event Image */}
         <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
           <img
-            src={ticket.image}
+            src={ticket.image || "/src/assets/web3-features.jpg"}
             alt={ticket.eventTitle}
             className="w-full h-full object-cover"
           />
@@ -70,7 +86,7 @@ export function MyTickets() {
         <div className="flex-1 space-y-2">
           <div className="flex items-start justify-between">
             <h3 className="font-semibold text-lg">{ticket.eventTitle}</h3>
-            <div className={`px-2 py-1 rounded-full text-white text-xs font-medium ${tierColors[ticket.tier as keyof typeof tierColors]}`}>
+            <div className={`px-2 py-1 rounded-full text-white text-xs font-medium ${tierColors[ticket.tier as keyof typeof tierColors] || 'bg-gray-500'}`}>
               {ticket.tier}
             </div>
           </div>
@@ -87,7 +103,7 @@ export function MyTickets() {
           </div>
 
           <div className="flex items-center gap-4 text-sm">
-            <span><strong>Seat:</strong> {ticket.seatNumber}</span>
+            <span><strong>Seat:</strong> {ticket.seatNumber || 'TBD'}</span>
             <span><strong>NFT ID:</strong> {ticket.id}</span>
           </div>
         </div>
@@ -112,6 +128,31 @@ export function MyTickets() {
       </div>
     </div>
   );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">My Tickets</h2>
+          <div className="h-6 bg-muted rounded w-24 animate-pulse"></div>
+        </div>
+        <div className="space-y-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="card-elevated p-6 space-y-4 animate-pulse">
+              <div className="flex gap-4">
+                <div className="w-20 h-20 bg-muted rounded-lg"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-6 bg-muted rounded w-3/4"></div>
+                  <div className="h-4 bg-muted rounded w-1/2"></div>
+                  <div className="h-4 bg-muted rounded w-2/3"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

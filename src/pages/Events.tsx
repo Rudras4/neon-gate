@@ -2,7 +2,9 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { EventFilters } from "@/components/EventFilters";
 import { EventGrid } from "@/components/EventGrid";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { eventsAPI } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const Events = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -14,6 +16,37 @@ const Events = () => {
     priceRange: [0, 1000],
     dateRange: null
   });
+  const [events, setEvents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { toast } = useToast();
+
+  // Fetch events from backend
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Get all published events
+        const response = await eventsAPI.getAll() as { events: any[] };
+        setEvents(response.events || []);
+        
+      } catch (err) {
+        console.error('❌ Error fetching events:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch events');
+        toast({
+          title: "Error",
+          description: "Failed to load events. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [toast]);
 
   return (
     <div className="min-h-screen bg-background theme-transition">
@@ -51,7 +84,13 @@ const Events = () => {
 
             {/* Right Content - Events Grid */}
             <div className="flex-1">
-              <EventGrid searchQuery={searchQuery} filters={filters} />
+              <EventGrid 
+                searchQuery={searchQuery} 
+                filters={filters} 
+                events={events}
+                isLoading={isLoading}
+                error={error}
+              />
             </div>
           </div>
         </div>
