@@ -2,6 +2,7 @@ import { EventCard } from "@/components/EventCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useMemo } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
+import { analyticsAPI } from "@/lib/api";
 
 interface EventGridProps {
   searchQuery: string;
@@ -21,7 +22,14 @@ const getEventTier = (price: number): "Platinum" | "Gold" | "Silver" | "Bronze" 
 
 // Helper function to check if event is popular (high attendance ratio)
 const isEventPopular = (attendees: number, maxAttendees: number): boolean => {
+  if (!maxAttendees || maxAttendees === 0) return false;
   return attendees / maxAttendees >= 0.7;
+};
+
+// Helper function to get attendance percentage
+const getAttendancePercentage = (attendees: number, maxAttendees: number): number => {
+  if (!maxAttendees || maxAttendees === 0) return 0;
+  return Math.round((attendees / maxAttendees) * 100);
 };
 
 // Helper function to get default image based on category
@@ -44,6 +52,30 @@ const getDefaultImage = (category: string): string => {
 
 export function EventGrid({ searchQuery, filters, events, isLoading, error }: EventGridProps) {
   const [sortBy, setSortBy] = useState("date");
+  const [userInteractions, setUserInteractions] = useState<{[key: string]: number}>({});
+
+  // Track user interactions with events
+  const trackEventInteraction = async (eventId: string, action: 'view' | 'click' | 'favorite') => {
+    setUserInteractions(prev => ({
+      ...prev,
+      [`${eventId}_${action}`]: (prev[`${eventId}_${action}`] || 0) + 1
+    }));
+    
+    // Send analytics to backend
+    try {
+      await analyticsAPI.trackEvent(eventId, action);
+      
+      // Also track detailed user behavior
+      await analyticsAPI.trackUserInteraction(eventId, action, {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        referrer: document.referrer
+      });
+    } catch (error) {
+      console.error('Failed to track event interaction:', error);
+    }
+  };
 
   // Filter and sort events
   const filteredAndSortedEvents = useMemo(() => {
@@ -170,16 +202,16 @@ export function EventGrid({ searchQuery, filters, events, isLoading, error }: Ev
               price: event.price?.toString() || '0',
               image: event.image_url || getDefaultImage(event.category),
               tier: getEventTier(event.price || 0),
-              attendees: 0, // We'll add this later when we implement ticket tracking
+              attendees: event.attendees || 0,
               maxAttendees: event.capacity || 100,
-              isPopular: false, // We'll calculate this based on ticket sales later
+              isPopular: isEventPopular(event.attendees || 0, event.capacity || 100),
               category: event.category,
               eventType: event.event_type
             };
             
             return (
               <div key={event.id}>
-                <EventCard {...transformedEvent} />
+                <EventCard {...transformedEvent} onInteraction={trackEventInteraction} />
               </div>
             );
           })}

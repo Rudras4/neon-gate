@@ -40,13 +40,32 @@ export function ProfileHeader() {
           avatar_url: response.user.avatar_url || ''
         });
         
-        // TODO: Fetch actual stats from backend
-        // For now, using mock stats
-        setStats({
-          eventsAttended: 12,
-          activeTickets: 3,
-          reviewsGiven: 5
-        });
+        // Fetch actual stats from backend
+        try {
+          const statsResponse = await usersAPI.getUserStats();
+          if (statsResponse && statsResponse.success) {
+            setStats({
+              eventsAttended: statsResponse.data.eventsAttended || 0,
+              activeTickets: statsResponse.data.activeTickets || 0,
+              reviewsGiven: statsResponse.data.reviewsGiven || 0
+            });
+          } else {
+            // Fallback to default stats if API fails
+            setStats({
+              eventsAttended: 0,
+              activeTickets: 0,
+              reviewsGiven: 0
+            });
+          }
+        } catch (statsError) {
+          console.error('Error fetching user stats:', statsError);
+          // Keep default stats on error
+          setStats({
+            eventsAttended: 0,
+            activeTickets: 0,
+            reviewsGiven: 0
+          });
+        }
       } catch (err) {
         console.error('Error fetching user profile:', err);
         toast({

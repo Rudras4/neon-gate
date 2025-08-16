@@ -5,11 +5,31 @@ import { Calendar, MapPin, QrCode, ExternalLink, ArrowUpRight } from "lucide-rea
 import { useState, useEffect } from "react";
 import { ticketsAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import QRCode from 'qrcode';
 
 export function MyTickets() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [qrCodes, setQrCodes] = useState<{[key: string]: string}>({});
   const { toast } = useToast();
+
+  // Generate QR codes for tickets
+  const generateQRCode = async (ticketId: string, ticketData: any) => {
+    try {
+      const qrData = JSON.stringify({
+        ticketId,
+        eventTitle: ticketData.eventTitle,
+        tier: ticketData.tier,
+        seatNumber: ticketData.seatNumber,
+        timestamp: new Date().toISOString()
+      });
+      
+      const qrCodeDataUrl = await QRCode.toDataURL(qrData);
+      setQrCodes(prev => ({ ...prev, [ticketId]: qrCodeDataUrl }));
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    }
+  };
 
   // Fetch user tickets from backend
   useEffect(() => {
@@ -17,7 +37,13 @@ export function MyTickets() {
       try {
         setIsLoading(true);
         const response = await ticketsAPI.getUserTickets();
-        setTickets(response.tickets || []);
+        const ticketsData = (response as any).tickets || [];
+        setTickets(ticketsData);
+        
+        // Generate QR codes for all tickets
+        ticketsData.forEach((ticket: any) => {
+          generateQRCode(ticket.id, ticket);
+        });
       } catch (err) {
         console.error('Error fetching tickets:', err);
         toast({
@@ -25,33 +51,8 @@ export function MyTickets() {
           description: "Failed to load tickets",
           variant: "destructive",
         });
-        // Fallback to mock data for demo purposes
-        setTickets([
-          {
-            id: "nft-001",
-            eventTitle: "Tech Conference 2024",
-            eventDate: "March 15, 2024",
-            eventLocation: "Convention Center, Mumbai",
-            tier: "Gold",
-            seatNumber: "A-15",
-            price: "150",
-            image: "/src/assets/hero-corporate.jpg",
-            status: "Active",
-            qrCode: "QR123456789"
-          },
-          {
-            id: "nft-002",
-            eventTitle: "EDM Night Festival",
-            eventDate: "March 20, 2024",
-            eventLocation: "Open Grounds, Pune",
-            tier: "Platinum",
-            seatNumber: "VIP-5",
-            price: "75",
-            image: "/src/assets/hero-concert.jpg",
-            status: "Active",
-            qrCode: "QR987654321"
-          }
-        ]);
+        // Set empty array instead of mock data
+        setTickets([]);
       } finally {
         setIsLoading(false);
       }
@@ -111,7 +112,35 @@ export function MyTickets() {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2 pt-4 border-t">
-        <Button variant="outline" size="sm">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => {
+            if (qrCodes[ticket.id]) {
+              // Show QR code in a modal or new window
+              const newWindow = window.open('', '_blank');
+              if (newWindow) {
+                newWindow.document.write(`
+                  <html>
+                    <head><title>QR Code - ${ticket.eventTitle}</title></title>
+                    <style>
+                      body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+                      img { max-width: 300px; border: 1px solid #ccc; }
+                      h1 { color: #333; }
+                    </style>
+                  </head>
+                  <body>
+                    <h1>${ticket.eventTitle}</h1>
+                    <p><strong>${ticket.tier} Ticket</strong></p>
+                    <p>Seat: ${ticket.seatNumber || 'TBD'}</p>
+                    <img src="${qrCodes[ticket.id]}" alt="QR Code" />
+                  </body>
+                  </html>
+                `);
+              }
+            }
+          }}
+        >
           <QrCode className="h-4 w-4 mr-2" />
           Show QR
         </Button>

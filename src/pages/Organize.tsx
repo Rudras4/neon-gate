@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { eventsAPI } from '@/lib/api';
+import { eventsAPI, notificationsAPI, mediaAPI, validationAPI } from '@/lib/api';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { Calendar, MapPin, Users, DollarSign, Loader2 } from 'lucide-react';
@@ -22,12 +22,28 @@ const Organize = () => {
     venue: '',
     spline3dUrl: '',
     capacity: '',
-    price: ''
+    price: '',
+    imageFile: null as File | null,
+    imageUrl: '',
+    imageGallery: [] as File[]
   });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // Validate Spline 3D URL
+  const isValidSplineUrl = (url: string): boolean => {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.protocol === 'https:' && 
+             (urlObj.hostname.includes('spline.design') || 
+              urlObj.hostname.includes('my.spline.design') ||
+              urlObj.hostname.includes('spline.com'));
+    } catch {
+      return false;
+    }
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -108,18 +124,36 @@ const Organize = () => {
         venue: formData.venue || '',
         capacity: formData.capacity ? parseInt(formData.capacity) : null,
         price: formData.price ? parseFloat(formData.price) : null,
-        imageUrl: '',
-        imageGallery: '',
+        imageUrl: formData.imageUrl || '',
+        imageGallery: formData.imageGallery.length > 0 ? formData.imageGallery : (formData.imageFile ? [formData.imageFile] : []),
         spline3dUrl: formData.spline3dUrl || '',
         status: 'draft'
       };
 
       console.log('Event data being sent:', eventData);
-      await eventsAPI.create(eventData);
+      const createdEvent = await eventsAPI.create(eventData);
+      
+      // Send confirmation email to organizer
+      try {
+        await notificationsAPI.sendEmail({
+          to: user?.email,
+          subject: `Event Created: ${formData.title}`,
+          template: 'event-created',
+          data: {
+            eventTitle: formData.title,
+            eventDate: formData.date,
+            eventVenue: formData.venue,
+            organizerName: user?.name
+          }
+        });
+      } catch (emailError) {
+        console.error('Failed to send confirmation email:', emailError);
+        // Don't fail the event creation if email fails
+      }
       
       toast({
         title: "Success",
-        description: "Event created successfully! Redirecting to events page...",
+        description: "Event created successfully! Check your email for confirmation. Redirecting to events page...",
       });
 
       // Reset form
@@ -131,7 +165,10 @@ const Organize = () => {
         venue: '',
         spline3dUrl: '',
         capacity: '',
-        price: ''
+        price: '',
+        imageFile: null,
+        imageUrl: '',
+        imageGallery: []
       });
 
       // Redirect to events page after a short delay
@@ -299,6 +336,187 @@ const Organize = () => {
                     </div>
 
                     <div className="space-y-3">
+                      <Label htmlFor="eventImage" className="text-sm font-medium">
+                        Event Image
+                      </Label>
+                      <Input
+                        id="eventImage"
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            // File validation
+                            const maxSize = 5 * 1024 * 1024; // 5MB
+                            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+                            
+                            if (file.size > maxSize) {
+                              toast({
+                                title: "File Too Large",
+                                description: "Please select an image smaller than 5MB",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                            
+                            if (!allowedTypes.includes(file.type)) {
+                              toast({
+                                title: "Invalid File Type",
+                                description: "Please select a JPEG, PNG, or WebP image",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                            
+                            // Upload image to backend
+                            try {
+                              const response = await mediaAPI.uploadImage(file, 'event') as any;
+                              if (response && response.success) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  imageFile: file,
+                                  imageUrl: response.data.imageUrl || URL.createObjectURL(file)
+                                }));
+                                toast({
+                                  title: "Image uploaded",
+                                  description: "Event image uploaded successfully",
+                                });
+                              } else {
+                                // Fallback to local preview if backend fails
+                                setFormData(prev => ({
+                                  ...prev,
+                                  imageFile: file,
+                                  imageUrl: URL.createObjectURL(file)
+                                }));
+                                toast({
+                                  title: "Upload warning",
+                                  description: "Image uploaded locally (backend unavailable)",
+                                  variant: "destructive",
+                                });
+                              }
+                            } catch (error) {
+                              console.error('Image upload error:', error);
+                              // Fallback to local preview
+                              setFormData(prev => ({
+                                ...prev,
+                                imageFile: file,
+                                imageUrl: URL.createObjectURL(file)
+                              }));
+                              toast({
+                                title: "Upload failed",
+                                description: "Image uploaded locally (backend error)",
+                                variant: "destructive",
+                              });
+                            }
+                          }
+                        }}
+                        className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                      />
+                      {formData.imageUrl && (
+                        <div className="mt-2">
+                          <img 
+                            src={formData.imageUrl} 
+                            alt="Preview" 
+                            className="w-32 h-24 object-cover rounded-lg border"
+                          />
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Upload an image for your event. Recommended size: 1200x800 pixels.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="imageGallery" className="text-sm font-medium">
+                        Additional Images (Optional)
+                      </Label>
+                      <Input
+                        id="imageGallery"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          
+                          // File validation
+                          const maxSize = 5 * 1024 * 1024; // 5MB
+                          const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+                          const maxFiles = 5;
+                          
+                          if (formData.imageGallery.length + files.length > maxFiles) {
+                            toast({
+                              title: "Too Many Files",
+                              description: `You can only upload up to ${maxFiles} images`,
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          
+                          const validFiles = files.filter(file => {
+                            if (file.size > maxSize) {
+                              toast({
+                                title: "File Too Large",
+                                description: `${file.name} is larger than 5MB`,
+                                variant: "destructive",
+                              });
+                              return false;
+                            }
+                            
+                            if (!allowedTypes.includes(file.type)) {
+                              toast({
+                                title: "Invalid File Type",
+                                description: `${file.name} is not a supported image type`,
+                                variant: "destructive",
+                              });
+                              return false;
+                            }
+                            
+                            return true;
+                          });
+                          
+                          setFormData(prev => ({
+                            ...prev,
+                            imageGallery: [...prev.imageGallery, ...validFiles]
+                          }));
+                        }}
+                        className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                      />
+                      {formData.imageGallery.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            {formData.imageGallery.length} image(s) selected
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {formData.imageGallery.map((file, index) => (
+                              <div key={index} className="relative">
+                                <img 
+                                  src={URL.createObjectURL(file)} 
+                                  alt={`Gallery ${index + 1}`} 
+                                  className="w-20 h-16 object-cover rounded border"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      imageGallery: prev.imageGallery.filter((_, i) => i !== index)
+                                    }));
+                                  }}
+                                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs hover:bg-red-600"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Add up to 5 additional images for your event gallery.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
                       <Label htmlFor="spline3dUrl" className="text-sm font-medium">
                         Spline 3D URL (Optional)
                       </Label>
@@ -307,9 +525,40 @@ const Organize = () => {
                         type="url"
                         placeholder="e.g., https://my-spline.com/model.spline"
                         value={formData.spline3dUrl}
-                        onChange={(e) => handleInputChange('spline3dUrl', e.target.value)}
-                        className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                        onChange={(e) => {
+                          const url = e.target.value;
+                          handleInputChange('spline3dUrl', url);
+                          
+                          // Validate URL if provided
+                          if (url && !isValidSplineUrl(url)) {
+                            toast({
+                              title: "Invalid URL",
+                              description: "Please enter a valid Spline 3D model URL",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        className={`bg-background/50 border-border/50 focus:border-primary transition-colors ${
+                          formData.spline3dUrl && !isValidSplineUrl(formData.spline3dUrl) 
+                            ? 'border-red-500' 
+                            : ''
+                        }`}
                       />
+                      {formData.spline3dUrl && (
+                        <div className="flex items-center gap-2">
+                          {isValidSplineUrl(formData.spline3dUrl) ? (
+                            <div className="flex items-center gap-2 text-green-600">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-xs">Valid 3D model URL</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-red-600">
+                              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                              <span className="text-xs">Invalid URL format</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Add a link to a 3D model for a more immersive experience. This will be displayed in the 3D Stadium View tab on your event page.
                       </p>

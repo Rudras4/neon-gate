@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, Users, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
 
 interface EventCardProps {
   id?: string;
@@ -14,6 +15,7 @@ interface EventCardProps {
   attendees: number;
   maxAttendees: number;
   isPopular?: boolean;
+  onInteraction?: (eventId: string, action: 'view' | 'click' | 'favorite') => void;
 }
 
 export function EventCard({
@@ -28,14 +30,43 @@ export function EventCard({
   attendees,
   maxAttendees,
   isPopular = false,
+  onInteraction,
 }: EventCardProps) {
   const navigate = useNavigate();
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Track when card comes into view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && onInteraction && id) {
+            onInteraction(id, 'view');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [id, onInteraction]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Don't navigate if clicking on the Buy Ticket button
     if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
       return;
     }
+    
+    // Track interaction
+    if (onInteraction && id) {
+      onInteraction(id, 'click');
+    }
+    
     navigate(`/events/${id}`);
   };
   const tierColors = {
@@ -46,7 +77,7 @@ export function EventCard({
   };
 
   return (
-    <div className="card-elevated group cursor-pointer" onClick={handleCardClick}>
+    <div ref={cardRef} className="card-elevated group cursor-pointer" onClick={handleCardClick}>
       {/* Image */}
       <div className="relative overflow-hidden rounded-t-xl">
         <img
@@ -100,6 +131,12 @@ export function EventCard({
             className="btn-hero"
             onClick={(e) => {
               e.stopPropagation();
+              
+              // Track interaction
+              if (onInteraction && id) {
+                onInteraction(id, 'click');
+              }
+              
               navigate(`/events/${id}`);
             }}
           >

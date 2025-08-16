@@ -2,8 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Wallet, Users, Star, Award, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWallet } from "@/hooks/useWallet";
+import { ticketsAPI, paymentsAPI } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface Ticket {
   tier: string;
@@ -35,14 +37,35 @@ export function EventTickets({ tickets, eventId }: EventTicketsProps) {
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
   const [purchaseStatus, setPurchaseStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [txHash, setTxHash] = useState<string | null>(null);
+  const { toast } = useToast();
   
   const { isConnected, connectWallet, purchaseTicket, isPurchasing, account, balance, isLoading } = useWallet();
 
-  const resaleTickets = [
-    { id: "nft-001", seller: "0x1234...5678", price: "120", tier: "Gold", seatNumber: "A-15" },
-    { id: "nft-002", seller: "0x9876...4321", price: "180", tier: "Platinum", seatNumber: "VIP-5" },
-    { id: "nft-003", seller: "0x5555...9999", price: "80", tier: "Silver", seatNumber: "B-22" },
-  ];
+  const [resaleTickets, setResaleTickets] = useState([
+    { id: "nft-001", seller: "0x1234...5678", price: "120", tier: "Gold", seatNumber: "A-15", status: "available" },
+    { id: "nft-002", seller: "0x9876...4321", price: "180", tier: "Platinum", seatNumber: "VIP-5", status: "available" },
+    { id: "nft-003", seller: "0x5555...9999", price: "80", tier: "Silver", seatNumber: "B-22", status: "available" },
+  ]);
+
+  // Fetch resale tickets from backend
+  useEffect(() => {
+    const fetchResaleTickets = async () => {
+      try {
+        const response = await ticketsAPI.getResaleTickets(eventId) as any;
+        if (response && response.success) {
+          setResaleTickets(response.tickets || []);
+        } else {
+          // Keep existing mock data if API fails
+          console.warn('Failed to fetch resale tickets, using fallback data');
+        }
+      } catch (error) {
+        console.error('Error fetching resale tickets:', error);
+        // Keep existing mock data on error
+      }
+    };
+
+    fetchResaleTickets();
+  }, [eventId]);
 
   const handlePurchase = async () => {
     if (!selectedTicket) return;
@@ -50,19 +73,86 @@ export function EventTickets({ tickets, eventId }: EventTicketsProps) {
     const ticket = tickets.find(t => t.tier === selectedTicket);
     if (!ticket) return;
 
-    const result = await purchaseTicket(selectedTicket, ticket.price);
-    
-    if (result.success) {
-      setPurchaseStatus('success');
-      setTxHash(result.txHash || null);
-      // Reset after 5 seconds
-      setTimeout(() => {
-        setPurchaseStatus('idle');
-        setSelectedTicket(null);
-        setTxHash(null);
-      }, 5000);
-    } else {
+    try {
+      // Create payment intent first
+      const paymentIntent = await paymentsAPI.createPaymentIntent({
+        eventId: eventId,
+        ticketData: {
+          tier: selectedTicket,
+          price: ticket.price,
+          quantity: 1
+        },
+        amount: ticket.price,
+        currency: 'AVAX'
+      }) as any;
+
+      if (!paymentIntent.success) {
+        toast({
+          title: "Payment Failed",
+          description: paymentIntent.error || "Failed to create payment intent",
+          variant: "destructive",
+        });
+        setPurchaseStatus('error');
+        setTimeout(() => setPurchaseStatus('idle'), 3000);
+        return;
+      }
+
+      // First, purchase ticket through backend
+      const ticketData = {
+        eventId: eventId,
+        tier: selectedTicket,
+        price: ticket.price,
+        quantity: 1
+      };
+
+      const backendResult = await ticketsAPI.purchaseTicket(eventId, ticketData) as any;
+       
+      if (backendResult?.success) {
+        // Confirm payment
+        await paymentsAPI.confirmPayment(paymentIntent.paymentIntentId, {
+          method: 'blockchain',
+          transactionHash: 'pending'
+        });
+
+        // Then proceed with blockchain purchase
+        const result = await purchaseTicket(selectedTicket, ticket.price);
+        
+        if (result.success) {
+          // Update payment with transaction hash
+          await paymentsAPI.confirmPayment(paymentIntent.paymentIntentId, {
+            method: 'blockchain',
+            transactionHash: result.txHash || 'completed'
+          });
+
+          setPurchaseStatus('success');
+          setTxHash(result.txHash || null);
+          // Reset after 5 seconds
+          setTimeout(() => {
+            setPurchaseStatus('idle');
+            setSelectedTicket(null);
+            setTxHash(null);
+          }, 5000);
+        } else {
+          setPurchaseStatus('error');
+          setTimeout(() => setPurchaseStatus('idle'), 3000);
+        }
+      } else {
+        setPurchaseStatus('error');
+        toast({
+          title: "Purchase Failed",
+          description: backendResult?.error || "Failed to purchase ticket",
+          variant: "destructive",
+        });
+        setTimeout(() => setPurchaseStatus('idle'), 3000);
+      }
+    } catch (error) {
+      console.error('Ticket purchase error:', error);
       setPurchaseStatus('error');
+      toast({
+        title: "Purchase Failed",
+        description: "An error occurred while purchasing the ticket",
+        variant: "destructive",
+      });
       setTimeout(() => setPurchaseStatus('idle'), 3000);
     }
   };
@@ -235,15 +325,53 @@ export function EventTickets({ tickets, eventId }: EventTicketsProps) {
                       <p className="text-lg font-bold text-primary">{ticket.price}</p>
                       <p className="text-xs text-muted-foreground">AVAX</p>
                     </div>
-                    <Button 
-                      size="sm"
-                      onClick={() => {
-                        // Handle P2P purchase logic here
-                        alert(`Purchasing ${ticket.tier} ticket from ${ticket.seller} for ${ticket.price} AVAX`);
-                      }}
-                    >
-                      Buy Now
-                    </Button>
+                                         <Button 
+                       size="sm"
+                       onClick={async () => {
+                         try {
+                           // Purchase resale ticket through backend
+                           const resaleData = {
+                             ticketId: ticket.id,
+                             eventId: eventId,
+                             seller: ticket.seller,
+                             price: ticket.price,
+                             tier: ticket.tier
+                           };
+                           
+                                                       // Purchase resale ticket through backend
+                            const result = await ticketsAPI.purchaseResaleTicket(ticket.id, resaleData) as any;
+                            
+                            if (result && result.success) {
+                              toast({
+                                title: "Resale Purchase Successful",
+                                description: `Purchased ${ticket.tier} ticket from ${ticket.seller} for ${ticket.price} AVAX`,
+                              });
+                              
+                              // Update ticket status
+                              setResaleTickets(prev => 
+                                prev.map(t => 
+                                  t.id === ticket.id ? { ...t, status: "sold" } : t
+                                )
+                              );
+                            } else {
+                              toast({
+                                title: "Purchase Failed",
+                                description: result?.error || "Failed to purchase resale ticket",
+                                variant: "destructive",
+                              });
+                            }
+                         } catch (error) {
+                           toast({
+                             title: "Purchase Failed",
+                             description: "Failed to purchase resale ticket",
+                             variant: "destructive",
+                           });
+                         }
+                       }}
+                       disabled={ticket.status === "sold"}
+                     >
+                       {ticket.status === "sold" ? "Sold" : "Buy Now"}
+                     </Button>
                   </div>
                 </div>
               </div>

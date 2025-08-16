@@ -3,7 +3,7 @@ import { Footer } from "@/components/Footer";
 import { EventFilters } from "@/components/EventFilters";
 import { EventGrid } from "@/components/EventGrid";
 import { useState, useEffect } from "react";
-import { eventsAPI } from "@/lib/api";
+import { eventsAPI, searchAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const Events = () => {
@@ -47,6 +47,41 @@ const Events = () => {
 
     fetchEvents();
   }, [toast]);
+
+  // Search events with backend API
+  useEffect(() => {
+    const searchEvents = async () => {
+      if (!searchQuery.trim() && Object.values(filters).every(v => 
+        v === "" || v === null || (Array.isArray(v) && v[0] === 0 && v[1] === 1000)
+      )) {
+        // No search query or filters, fetch all events
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const searchResponse = await searchAPI.searchEvents(searchQuery, filters) as any;
+        if (searchResponse && searchResponse.success) {
+          setEvents(searchResponse.events || []);
+        } else {
+          // Fallback to client-side filtering if backend search fails
+          console.warn('Backend search failed, using client-side filtering');
+        }
+      } catch (err) {
+        console.error('❌ Error searching events:', err);
+        // Fallback to client-side filtering on error
+        console.warn('Using client-side filtering due to search error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(searchEvents, 500);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, filters]);
 
   return (
     <div className="min-h-screen bg-background theme-transition">
