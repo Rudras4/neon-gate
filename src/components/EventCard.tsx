@@ -84,9 +84,11 @@ export function EventCard({
             <span className="text-2xl font-bold text-primary">{price}</span>
             <span className="text-muted-foreground text-sm ml-1">AVAX</span>
           </div>
-          <Button className="btn-hero">
-            Buy Ticket
-          </Button>
+          <a href="/events/1">
+            <Button className="btn-hero">
+              Buy Ticket
+            </Button>
+          </a>
         </div>
       </div>
     </div>

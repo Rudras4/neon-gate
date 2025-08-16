@@ -20,14 +20,14 @@ export function Navbar() {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-6">
-          <a href="#events" className="text-foreground/80 hover:text-foreground transition-colors">
+          <a href="/events" className="text-foreground/80 hover:text-foreground transition-colors">
             Events
           </a>
           <a href="#organize" className="text-foreground/80 hover:text-foreground transition-colors">
             Organize
           </a>
-          <a href="#about" className="text-foreground/80 hover:text-foreground transition-colors">
-            About
+          <a href="/profile" className="text-foreground/80 hover:text-foreground transition-colors">
+            Profile
           </a>
         </div>
 
@@ -69,14 +69,14 @@ export function Navbar() {
       {isMenuOpen && (
         <div className="md:hidden border-t bg-background/95 backdrop-blur">
           <div className="container py-4 space-y-2">
-            <a href="#events" className="block py-2 text-foreground/80 hover:text-foreground">
+            <a href="/events" className="block py-2 text-foreground/80 hover:text-foreground">
               Events
             </a>
             <a href="#organize" className="block py-2 text-foreground/80 hover:text-foreground">
               Organize
             </a>
-            <a href="#about" className="block py-2 text-foreground/80 hover:text-foreground">
-              About
+            <a href="/profile" className="block py-2 text-foreground/80 hover:text-foreground">
+              Profile
             </a>
             <Button variant="outline" className="w-full mt-4">
               <Wallet className="h-4 w-4 mr-2" />
