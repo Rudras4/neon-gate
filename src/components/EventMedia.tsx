@@ -127,3 +127,4 @@ export function EventMedia({ images, spline3dUrl }: EventMediaProps) {
     </div>
   );
 }
+

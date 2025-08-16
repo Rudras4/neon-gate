@@ -1,16 +1,24 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { web3Service, NETWORKS } from '@/lib/web3';
 
 interface WalletContextType {
   isConnected: boolean;
   account: string | null;
   balance: string | null;
   chainId: number | null;
+  currentNetwork: string;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
+  switchNetwork: (networkName: keyof typeof NETWORKS) => Promise<void>;
   isLoading: boolean;
   error: string | null;
-  purchaseTicket: (ticketTier: string, price: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
+  purchaseTicket: (eventContractAddress: string, tier: string, seatNumber: number, price: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
+  listTicketForResale: (eventContractAddress: string, tokenId: number, price: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
+  buyResaleTicket: (listingId: number, price: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
+  createEvent: (eventConfig: any) => Promise<{ success: boolean; txHash?: string; error?: string }>;
   isPurchasing: boolean;
+  isListing: boolean;
+  isCreatingEvent: boolean;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -24,9 +32,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
   const [account, setAccount] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
+  const [currentNetwork, setCurrentNetwork] = useState<string>('AVALANCHE_FUJI');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isListing, setIsListing] = useState(false);
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
   // Check if wallet is already connected on load
   useEffect(() => {
@@ -46,7 +57,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
   const checkConnection = async () => {
     try {
-      if (window.ethereum) {
+      if (web3Service.isConnected()) {
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
           setAccount(accounts[0]);
@@ -70,27 +81,14 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
   const handleChainChanged = (chainId: string) => {
     setChainId(parseInt(chainId, 16));
+    setCurrentNetwork(web3Service.getCurrentNetwork());
   };
 
   const updateWalletInfo = async (address: string) => {
     try {
-      // Get balance using web3 RPC calls
-      const balanceHex = await window.ethereum.request({
-        method: 'eth_getBalance',
-        params: [address, 'latest']
-      });
-      
-      // Convert hex balance to decimal and then to ether
-      const balanceWei = parseInt(balanceHex, 16);
-      const balanceEther = (balanceWei / Math.pow(10, 18)).toFixed(6);
-      
-      // Get chain ID
-      const chainIdHex = await window.ethereum.request({
-        method: 'eth_chainId'
-      });
-      
-      setBalance(balanceEther);
-      setChainId(parseInt(chainIdHex, 16));
+      const balance = await web3Service.getBalance(address);
+      setBalance(balance);
+      setCurrentNetwork(web3Service.getCurrentNetwork());
     } catch (err) {
       console.error('Error updating wallet info:', err);
     }
@@ -105,15 +103,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
         throw new Error('MetaMask is not installed. Please install MetaMask to continue.');
       }
 
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts',
-      });
-
-      if (accounts.length > 0) {
-        setAccount(accounts[0]);
-        setIsConnected(true);
-        await updateWalletInfo(accounts[0]);
-      }
+      const account = await web3Service.connectWallet();
+      setAccount(account);
+      setIsConnected(true);
+      await updateWalletInfo(account);
     } catch (err: any) {
       setError(err.message || 'Failed to connect wallet');
       console.error('Error connecting wallet:', err);
@@ -130,7 +123,26 @@ export function WalletProvider({ children }: WalletProviderProps) {
     setError(null);
   };
 
-  const purchaseTicket = async (ticketTier: string, price: string) => {
+  const switchNetwork = async (networkName: keyof typeof NETWORKS) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await web3Service.switchNetwork(networkName);
+      setCurrentNetwork(networkName);
+      
+      if (account) {
+        await updateWalletInfo(account);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to switch network');
+      console.error('Error switching network:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const purchaseTicket = async (eventContractAddress: string, tier: string, seatNumber: number, price: string) => {
     setIsPurchasing(true);
     setError(null);
 
@@ -139,29 +151,13 @@ export function WalletProvider({ children }: WalletProviderProps) {
         throw new Error('Please connect your wallet first');
       }
 
-      // Convert AVAX price to Wei (18 decimals)
-      const priceInWei = (parseFloat(price) * Math.pow(10, 18)).toString(16);
+      // Generate metadata URI (in production, this would be uploaded to IPFS)
+      const metadataURI = `ipfs://Qm${Math.random().toString(36).substring(2)}`;
       
-      // Simulate contract interaction for ticket purchase
-      const txHash = await window.ethereum.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          from: account,
-          to: '0x742d35Cc6634C0532925a3b8D0C4E0E4C3E8F8B8', // Mock contract address
-          value: `0x${priceInWei}`,
-          data: '0x' + 
-            // Function selector for buyTicket(string)
-            'a9059cbb' + 
-            // Encode ticket tier as bytes32
-            ticketTier.padEnd(64, '0').split('').map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').substring(0, 64)
-        }]
-      });
-
+      const txHash = await web3Service.mintTicket(eventContractAddress, account, seatNumber, tier, metadataURI);
+      
       // Update balance after transaction
       await updateWalletInfo(account);
-      
-      // Simulate NFT minting delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
       
       return { success: true, txHash };
     } catch (err: any) {
@@ -173,17 +169,93 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   };
 
+  const listTicketForResale = async (eventContractAddress: string, tokenId: number, price: string) => {
+    setIsListing(true);
+    setError(null);
+
+    try {
+      if (!isConnected || !account) {
+        throw new Error('Please connect your wallet first');
+      }
+
+      const txHash = await web3Service.listTicketForResale(eventContractAddress, tokenId, price);
+      
+      return { success: true, txHash };
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to list ticket for resale';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsListing(false);
+    }
+  };
+
+  const buyResaleTicket = async (listingId: number, price: string) => {
+    setIsPurchasing(true);
+    setError(null);
+
+    try {
+      if (!isConnected || !account) {
+        throw new Error('Please connect your wallet first');
+      }
+
+      const txHash = await web3Service.buyResaleTicket(listingId, price);
+      
+      // Update balance after transaction
+      await updateWalletInfo(account);
+      
+      return { success: true, txHash };
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to buy resale ticket';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const createEvent = async (eventConfig: any) => {
+    setIsCreatingEvent(true);
+    setError(null);
+
+    try {
+      if (!isConnected || !account) {
+        throw new Error('Please connect your wallet first');
+      }
+
+      const txHash = await web3Service.createEvent(eventConfig);
+      
+      // Update balance after transaction
+      await updateWalletInfo(account);
+      
+      return { success: true, txHash };
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create event';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsCreatingEvent(false);
+    }
+  };
+
   const value = {
     isConnected,
     account,
     balance,
     chainId,
+    currentNetwork,
     connectWallet,
     disconnectWallet,
+    switchNetwork,
     isLoading,
     error,
     purchaseTicket,
+    listTicketForResale,
+    buyResaleTicket,
+    createEvent,
     isPurchasing,
+    isListing,
+    isCreatingEvent,
   };
 
   return (

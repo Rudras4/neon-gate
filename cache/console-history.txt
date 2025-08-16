@@ -1,0 +1,2 @@
+cd neon-gate
+cd ..\backend
