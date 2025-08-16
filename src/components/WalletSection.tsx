@@ -10,6 +10,7 @@ export function WalletSection() {
 
   const getNetworkName = (chainId: number | null) => {
     switch (chainId) {
+      case 31337: return "Hardhat Localhost";
       case 43114: return "Avalanche Mainnet";
       case 43113: return "Avalanche Fuji Testnet";
       case 1: return "Ethereum Mainnet";

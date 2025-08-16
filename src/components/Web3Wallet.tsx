@@ -54,7 +54,7 @@ export function Web3Wallet() {
       await switchNetwork(networkName as keyof typeof NETWORKS);
       toast({
         title: "Network Switched",
-        description: `Successfully switched to ${NETWORKS[networkName as keyof typeof NETWORKS].chainName}`,
+        description: `Successfully switched to ${NETWORKS[networkName as keyof typeof NETWORKS]?.chainName || networkName}`,
         variant: "default",
       });
     } catch (error) {
@@ -63,6 +63,78 @@ export function Web3Wallet() {
         description: error instanceof Error ? error.message : "Failed to switch network",
         variant: "destructive",
       });
+    }
+  };
+
+  const addLocalhostNetwork = async () => {
+    try {
+      if (!window.ethereum) {
+        toast({
+          title: "MetaMask Not Found",
+          description: "Please install MetaMask to continue",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // First add the network
+      await window.ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: '0x7a69', // 31337
+          chainName: 'Hardhat Localhost',
+          nativeCurrency: {
+            name: 'ETH',
+            symbol: 'ETH',
+            decimals: 18,
+          },
+          rpcUrls: ['http://127.0.0.1:8545'],
+          blockExplorerUrls: [],
+        }],
+      });
+
+      toast({
+        title: "Network Added",
+        description: "Localhost network has been added to MetaMask",
+        variant: "default",
+      });
+
+      // Then switch to the localhost network
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x7a69' }],
+        });
+        
+        toast({
+          title: "Network Switched",
+          description: "Successfully switched to Hardhat Localhost",
+          variant: "default",
+        });
+      } catch (switchError: any) {
+        if (switchError.code === 4902) {
+          toast({
+            title: "Network Switch Failed",
+            description: "Please manually switch to Hardhat Localhost network",
+            variant: "destructive",
+          });
+        }
+      }
+
+    } catch (error: any) {
+      if (error.code === 4001) {
+        toast({
+          title: "Network Addition Cancelled",
+          description: "User rejected the network addition",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Network Addition Failed",
+          description: error.message || "Failed to add network",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -98,6 +170,44 @@ export function Web3Wallet() {
         return 'bg-blue-100 text-blue-800 border-blue-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const switchToLocalhost = async () => {
+    try {
+      if (!window.ethereum) {
+        toast({
+          title: "MetaMask Not Found",
+          description: "Please install MetaMask to continue",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x7a69' }],
+      });
+      
+      toast({
+        title: "Network Switched",
+        description: "Successfully switched to Hardhat Localhost",
+        variant: "default",
+      });
+    } catch (error: any) {
+      if (error.code === 4902) {
+        toast({
+          title: "Network Not Found",
+          description: "Please add the localhost network first using 'Add Localhost' button",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Network Switch Failed",
+          description: error.message || "Failed to switch network",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -160,27 +270,37 @@ export function Web3Wallet() {
       <CardContent className="space-y-4">
         {/* Network Selection */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Network</label>
-          <Select value={currentNetwork} onValueChange={handleNetworkSwitch}>
-            <SelectTrigger>
-              <SelectValue>
-                <div className="flex items-center gap-2">
-                  <span>{getNetworkIcon(currentNetwork)}</span>
-                  <span>{NETWORKS[currentNetwork as keyof typeof NETWORKS]?.chainName || currentNetwork}</span>
-                </div>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(NETWORKS).map(([key, network]) => (
-                <SelectItem key={key} value={key}>
-                  <div className="flex items-center gap-2">
-                    <span>{getNetworkIcon(key)}</span>
-                    <span>{network.chainName}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <label className="text-sm font-medium">Network</label>
+          <div className="flex gap-2">
+            <Select value={currentNetwork} onValueChange={handleNetworkSwitch}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(NETWORKS).map(([key, network]) => (
+                  <SelectItem key={key} value={key}>
+                    {network.chainName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={addLocalhostNetwork}
+              variant="outline"
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              Add Localhost
+            </Button>
+            <Button
+              onClick={switchToLocalhost}
+              variant="outline"
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              Switch to Localhost
+            </Button>
+          </div>
         </div>
 
         {/* Current Network Badge */}

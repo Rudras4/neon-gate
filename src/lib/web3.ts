@@ -1,17 +1,33 @@
 import { ethers } from 'ethers';
+import { transactionTracker } from './transactionTracker';
 
-// Contract ABIs (these will be generated from our compiled contracts)
+// Contract ABIs (updated to match actual deployed contracts)
 export const EVENT_FACTORY_ABI = [
   "function createEvent(tuple(string eventName, string eventDescription, uint256 maxOccupancy, uint256[] tierPrices, string[] tierNames, uint256 eventDate, uint256[] tierQuantities) config) external payable returns (address eventContract)",
   "function getOrganizerEvents(address organizer) external view returns (address[] memory)",
-  "function eventCreationFee() external view returns (uint256)",
-  "function allEvents() external view returns (address[] memory)"
+  "function getAllEvents() external view returns (address[] memory)",
+  "function getEventCreationFee() external view returns (uint256)",
+  "function updateCreationFee(uint256 newFee) external",
+  "function pause() external",
+  "function unpause() external",
+  "function withdrawFees() external",
+  "function emergencyPause() external",
+  "function owner() external view returns (address)",
+  "function paused() external view returns (bool)"
 ];
 
 export const EVENT_TICKET_ABI = [
   "function mintTicket(address to, uint256 seatNumber, string memory tierName, string memory metadataURI) external returns (uint256)",
   "function mintInitialTickets(uint256[] memory tierQuantities, address organizer) external",
   "function getTicket(uint256 tokenId) external view returns (tuple(uint256 tokenId, uint256 seatNumber, string tier, string metadataURI, address owner, bool exists))",
+  "function getSeatNumber(uint256 tokenId) external view returns (uint256)",
+  "function getTicketTier(uint256 tokenId) external view returns (string memory)",
+  "function getUserTickets(address user) external view returns (uint256[] memory)",
+  "function getTier(string memory tierName) external view returns (tuple(string name, uint256 price, uint256 quantity, uint256 minted, bool exists))",
+  "function getAllTierNames() external view returns (string[] memory)",
+  "function isSeatOccupied(uint256 seatNumber) external view returns (bool)",
+  "function getTotalMinted() external view returns (uint256)",
+  "function getAvailableSeats() external view returns (uint256)",
   "function ownerOf(uint256 tokenId) external view returns (address)",
   "function approve(address to, uint256 tokenId) external",
   "function transferFrom(address from, address to, uint256 tokenId) external",
@@ -25,11 +41,23 @@ export const TICKET_RESALE_ABI = [
   "function cancelResaleListing(uint256 listingId) external",
   "function getResaleListings(address eventContract) external view returns (uint256[] memory)",
   "function getListing(uint256 listingId) external view returns (tuple(uint256 listingId, address eventContract, uint256 tokenId, address seller, uint256 price, uint256 timestamp, bool isActive, string metadataURI))",
-  "function isTicketListed(address eventContract, uint256 tokenId) external view returns (bool)"
+  "function isTicketListed(address eventContract, uint256 tokenId) external view returns (bool)",
+  "function getUserListings(address user) external view returns (uint256[] memory)"
 ];
 
 // Network configurations
 export const NETWORKS = {
+  LOCALHOST: {
+    chainId: '0x7a69', // 31337
+    chainName: 'Hardhat Localhost',
+    nativeCurrency: {
+      name: 'ETH',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+    rpcUrls: ['http://127.0.0.1:8545'],
+    blockExplorerUrls: [],
+  },
   AVALANCHE_FUJI: {
     chainId: '0xa869', // 43113
     chainName: 'Avalanche Fuji Testnet',
@@ -54,8 +82,12 @@ export const NETWORKS = {
   },
 };
 
-// Contract addresses (will be updated after deployment)
+// Contract addresses (updated after deployment)
 export const CONTRACT_ADDRESSES = {
+  LOCALHOST: {
+    EVENT_FACTORY: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+    TICKET_RESALE: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+  },
   AVALANCHE_FUJI: {
     EVENT_FACTORY: '0x...', // Will be populated after deployment
     TICKET_RESALE: '0x...', // Will be populated after deployment
@@ -69,35 +101,59 @@ export const CONTRACT_ADDRESSES = {
 export class Web3Service {
   private provider: ethers.BrowserProvider | null = null;
   private signer: ethers.JsonRpcSigner | null = null;
-  private currentNetwork: string = 'AVALANCHE_FUJI';
+  private currentNetwork: string = 'LOCALHOST';
 
   constructor() {
-    this.initializeProvider();
+    // Don't auto-initialize - wait for explicit initialization
+  }
+
+  isMetaMaskAvailable(): boolean {
+    return typeof window !== 'undefined' && 
+           window.ethereum && 
+           window.ethereum.isMetaMask;
   }
 
   private async initializeProvider() {
-    if (typeof window !== 'undefined' && window.ethereum) {
-      this.provider = new ethers.BrowserProvider(window.ethereum);
-      this.signer = await this.provider.getSigner();
-      
-      // Get current network
-      const network = await this.provider.getNetwork();
-      this.currentNetwork = this.getNetworkByChainId(network.chainId);
+    if (!this.isMetaMaskAvailable()) {
+      throw new Error('MetaMask is not available');
     }
+
+    this.provider = new ethers.BrowserProvider(window.ethereum);
+    this.signer = await this.provider.getSigner();
+    
+    // Get current network and force correct detection
+    const network = await this.provider.getNetwork();
+    const detectedNetwork = this.getNetworkByChainId(network.chainId);
+    
+    console.log('🔍 Network Detection:');
+    console.log('   Raw Chain ID:', network.chainId.toString());
+    console.log('   Detected Network:', detectedNetwork);
+    console.log('   Previous Network:', this.currentNetwork);
+    
+    // Force update to detected network
+    this.currentNetwork = detectedNetwork;
+    
+    console.log('✅ Final Network Set:', this.currentNetwork);
   }
 
   private getNetworkByChainId(chainId: bigint): string {
     switch (chainId.toString()) {
+      case '31337':
+        return 'LOCALHOST';
       case '43113':
         return 'AVALANCHE_FUJI';
       case '11155111':
         return 'SEPOLIA';
       default:
-        return 'AVALANCHE_FUJI';
+        return 'LOCALHOST';
     }
   }
 
   async connectWallet(): Promise<string> {
+    if (!this.provider) {
+      await this.initializeProvider();
+    }
+
     if (!this.provider) {
       throw new Error('Provider not initialized');
     }
@@ -142,6 +198,10 @@ export class Web3Service {
 
   async getBalance(address: string): Promise<string> {
     if (!this.provider) {
+      await this.initializeProvider();
+    }
+
+    if (!this.provider) {
       throw new Error('Provider not initialized');
     }
 
@@ -149,10 +209,61 @@ export class Web3Service {
     return ethers.formatEther(balance);
   }
 
-  async createEvent(eventConfig: any): Promise<string> {
-    if (!this.signer) {
-      throw new Error('Signer not initialized');
+  async testContractConnection(): Promise<boolean> {
+    try {
+      console.log('🔍 Testing contract connection...');
+      
+      if (!this.provider) {
+        console.log('📡 Initializing provider...');
+        await this.initializeProvider();
+      }
+
+      console.log('🌐 Current network:', this.currentNetwork);
+      console.log('📋 Contract address:', CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY);
+
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES].EVENT_FACTORY,
+        EVENT_FACTORY_ABI,
+        this.provider
+      );
+
+      console.log('📝 Contract instance created, testing connection...');
+
+      // Test basic contract call
+      const fee = await contract.getEventCreationFee();
+      console.log('✅ Contract connection successful, creation fee:', ethers.formatEther(fee), 'ETH');
+      return true;
+    } catch (error) {
+      console.error('❌ Contract connection failed:', error);
+      
+      // Provide more specific error information
+      if (error.message.includes('network')) {
+        console.error('🌐 Network connection issue detected');
+      }
+      if (error.message.includes('contract')) {
+        console.error('📋 Contract address issue detected');
+      }
+      if (error.message.includes('ABI')) {
+        console.error('📝 ABI issue detected');
+      }
+      
+      return false;
     }
+  }
+
+  async createEvent(eventConfig: any): Promise<{ txHash: string; gasUsed: string; totalCost: string }> {
+    if (!this.signer) {
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      if (!this.signer) {
+        throw new Error('Signer not initialized');
+      }
+    }
+
+    console.log('🎯 Creating event...');
+    console.log('🌐 Current network:', this.currentNetwork);
+    console.log('📋 Contract address:', CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY);
 
     const contract = new ethers.Contract(
       CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES].EVENT_FACTORY,
@@ -160,17 +271,83 @@ export class Web3Service {
       this.signer
     );
 
-    const creationFee = await contract.eventCreationFee();
+    // Get creation fee
+    let creationFee;
+    try {
+      console.log('💰 Trying getEventCreationFee()...');
+      creationFee = await contract.getEventCreationFee();
+      console.log('✅ getEventCreationFee() successful:', ethers.formatEther(creationFee), 'ETH');
+    } catch (error) {
+      console.log('⚠️ getEventCreationFee() failed, using fallback value...');
+      console.log('❌ Error details:', error.message);
+      
+      // Fallback to hardcoded value (0.01 ETH = 10000000000000000 wei)
+      creationFee = ethers.parseEther('0.01');
+      console.log('🔄 Using fallback creation fee:', ethers.formatEther(creationFee), 'ETH');
+      console.log('💡 This is the known contract value from EventFactory.sol');
+    }
     
+    console.log('📝 Creating event with config:', eventConfig);
     const tx = await contract.createEvent(eventConfig, { value: creationFee });
-    const receipt = await tx.wait();
+    console.log('📤 Transaction sent:', tx.hash);
     
-    return receipt.transactionHash;
+    const receipt = await tx.wait();
+    console.log('✅ Transaction confirmed');
+    console.log('📋 Receipt details:', {
+      hash: receipt.hash,
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+      gasUsed: receipt.gasUsed?.toString()
+    });
+    
+    // Get transaction hash from multiple possible sources
+    const transactionHash = receipt.hash || receipt.transactionHash || tx.hash;
+    
+    if (!transactionHash) {
+      console.error('❌ No transaction hash found in receipt or transaction');
+      console.error('Receipt keys:', Object.keys(receipt));
+      console.error('Transaction keys:', Object.keys(tx));
+      throw new Error('Transaction confirmed but no transaction hash could be retrieved');
+    }
+    
+    console.log('🔗 Using transaction hash:', transactionHash);
+    
+    // Track the transaction
+    try {
+      await transactionTracker.trackTransaction(transactionHash, 'EVENT_CREATION', {
+        eventConfig,
+        creationFee: creationFee.toString()
+      });
+      console.log('📊 Transaction tracked successfully');
+    } catch (trackingError) {
+      console.warn('⚠️ Transaction tracking failed, but event creation was successful:', trackingError.message);
+      // Don't fail the entire operation if tracking fails
+    }
+    
+    // Calculate gas cost
+    const gasUsed = receipt.gasUsed;
+    const gasPrice = receipt.gasPrice || 0n;
+    const gasCost = gasUsed * gasPrice;
+    const totalCost = creationFee + gasCost;
+    
+    console.log('⛽ Gas used:', gasUsed.toString());
+    console.log('💸 Total cost:', ethers.formatEther(totalCost), 'ETH');
+    
+    return {
+      txHash: transactionHash,
+      gasUsed: gasUsed.toString(),
+      totalCost: totalCost.toString()
+    };
   }
 
   async mintTicket(eventContractAddress: string, to: string, seatNumber: number, tier: string, metadataURI: string): Promise<string> {
     if (!this.signer) {
-      throw new Error('Signer not initialized');
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      if (!this.signer) {
+        throw new Error('Signer not initialized');
+      }
     }
 
     const contract = new ethers.Contract(eventContractAddress, EVENT_TICKET_ABI, this.signer);
@@ -178,12 +355,26 @@ export class Web3Service {
     const tx = await contract.mintTicket(to, seatNumber, tier, metadataURI);
     const receipt = await tx.wait();
     
+    // Track the transaction
+    await transactionTracker.trackTransaction(receipt.transactionHash, 'TICKET_PURCHASE', {
+      eventContract: eventContractAddress,
+      to,
+      seatNumber,
+      tier,
+      metadataURI
+    });
+    
     return receipt.transactionHash;
   }
 
   async listTicketForResale(eventContractAddress: string, tokenId: number, price: string): Promise<string> {
     if (!this.signer) {
-      throw new Error('Signer not initialized');
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      if (!this.signer) {
+        throw new Error('Signer not initialized');
+      }
     }
 
     // First approve the resale contract
@@ -200,12 +391,25 @@ export class Web3Service {
     const tx = await resaleContract.listTicketForResale(eventContractAddress, tokenId, priceInWei);
     const receipt = await tx.wait();
     
+    // Track the transaction
+    await transactionTracker.trackTransaction(receipt.transactionHash, 'TICKET_RESALE', {
+      eventContract: eventContractAddress,
+      tokenId,
+      price,
+      priceInWei: priceInWei.toString()
+    });
+    
     return receipt.transactionHash;
   }
 
   async buyResaleTicket(listingId: number, price: string): Promise<string> {
     if (!this.signer) {
-      throw new Error('Signer not initialized');
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      if (!this.signer) {
+        throw new Error('Signer not initialized');
+      }
     }
 
     const resaleContract = new ethers.Contract(
@@ -218,6 +422,13 @@ export class Web3Service {
     
     const tx = await resaleContract.buyResaleTicket(listingId, { value: priceInWei });
     const receipt = await tx.wait();
+    
+    // Track the transaction
+    await transactionTracker.trackTransaction(receipt.transactionHash, 'TICKET_BUY_RESALE', {
+      listingId,
+      price,
+      priceInWei: priceInWei.toString()
+    });
     
     return receipt.transactionHash;
   }
@@ -275,8 +486,247 @@ export class Web3Service {
     return this.currentNetwork;
   }
 
+  async getNetworkInfo(): Promise<{ chainId: string; networkName: string; contractAddress: string }> {
+    if (!this.provider) {
+      await this.initializeProvider();
+    }
+
+    const network = await this.provider!.getNetwork();
+    const chainId = network.chainId.toString();
+    const networkName = this.getNetworkByChainId(network.chainId);
+    const contractAddress = CONTRACT_ADDRESSES[networkName as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY || 'Not configured';
+
+    return {
+      chainId,
+      networkName,
+      contractAddress
+    };
+  }
+
   isConnected(): boolean {
-    return this.signer !== null;
+    return this.provider !== null && this.signer !== null;
+  }
+
+  async diagnoseNetworkIssue(): Promise<string> {
+    try {
+      console.log('🔍 Diagnosing network issue...');
+      
+      // Check MetaMask availability
+      if (!this.isMetaMaskAvailable()) {
+        return 'MetaMask is not available';
+      }
+      
+      // Check if provider is initialized
+      if (!this.provider) {
+        return 'Provider not initialized - try connecting wallet first';
+      }
+      
+      // Check current network
+      const network = await this.provider.getNetwork();
+      const chainId = network.chainId.toString();
+      const detectedNetwork = this.getNetworkByChainId(network.chainId);
+      
+      console.log('🌐 Current Network State:');
+      console.log('   Chain ID:', chainId);
+      console.log('   Detected Network:', detectedNetwork);
+      console.log('   Expected Network:', 'LOCALHOST');
+      console.log('   Expected Chain ID:', '31337');
+      
+      // Check if we're on the right network
+      if (chainId !== '31337') {
+        return `Wrong network detected. Current: ${chainId}, Expected: 31337. Please switch to Hardhat Localhost in MetaMask.`;
+      }
+      
+      // Check if contract addresses are configured
+      const contractAddress = CONTRACT_ADDRESSES[detectedNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY;
+      if (!contractAddress || contractAddress === '0x...') {
+        return 'Contract addresses not configured for current network';
+      }
+      
+      // Try to connect to contract
+      try {
+        const contract = new ethers.Contract(contractAddress, EVENT_FACTORY_ABI, this.provider);
+        await contract.getEventCreationFee();
+        return 'Network connection successful - no issues detected';
+      } catch (contractError) {
+        return `Contract connection failed: ${contractError.message}`;
+      }
+      
+    } catch (error) {
+      return `Diagnosis failed: ${error.message}`;
+    }
+  }
+
+  async checkNetworkStatus(): Promise<void> {
+    try {
+      console.log('🔍 Checking network status...');
+      
+      if (!this.provider) {
+        console.log('❌ Provider not initialized');
+        return;
+      }
+
+      const network = await this.provider.getNetwork();
+      console.log('🌐 Network Info:');
+      console.log('   Chain ID:', network.chainId.toString());
+      console.log('   Network Name:', network.name || 'Unknown');
+      
+      console.log('📱 MetaMask Info:');
+      console.log('   Available:', this.isMetaMaskAvailable());
+      console.log('   Connected:', this.isConnected());
+      
+      console.log('📋 Contract Addresses:');
+      console.log('   Current Network:', this.currentNetwork);
+      console.log('   EventFactory:', CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY);
+      console.log('   TicketResale:', CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.TICKET_RESALE);
+      
+    } catch (error) {
+      console.error('❌ Error checking network status:', error);
+    }
+  }
+
+  async simpleTest(): Promise<string> {
+    try {
+      console.log('🧪 Simple connection test...');
+      
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      
+      const network = await this.provider!.getNetwork();
+      console.log('🌐 Network:', network.chainId.toString());
+      
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES].EVENT_FACTORY,
+        EVENT_FACTORY_ABI,
+        this.provider
+      );
+      
+      const fee = await contract.getEventCreationFee();
+      return `✅ Success! Fee: ${ethers.formatEther(fee)} ETH`;
+      
+    } catch (error) {
+      return `❌ Failed: ${error.message}`;
+    }
+  }
+
+  async debugContractCall(): Promise<string> {
+    try {
+      console.log('🔍 Debugging contract call...');
+      
+      // Step 1: Check if provider exists
+      if (!this.provider) {
+        console.log('📡 No provider, initializing...');
+        await this.initializeProvider();
+      }
+      
+      // Step 2: Check network
+      const network = await this.provider!.getNetwork();
+      console.log('🌐 Network Chain ID:', network.chainId.toString());
+      
+      // Step 3: Check contract address
+      const contractAddress = CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY;
+      console.log('📋 Contract Address:', contractAddress);
+      
+      // Step 4: Create contract instance
+      console.log('📝 Creating contract instance...');
+      const contract = new ethers.Contract(
+        contractAddress,
+        EVENT_FACTORY_ABI,
+        this.provider
+      );
+      console.log('✅ Contract instance created');
+      
+      // Step 5: Try to call the function
+      console.log('📞 Calling getEventCreationFee()...');
+      const fee = await contract.getEventCreationFee();
+      console.log('💰 Fee received:', ethers.formatEther(fee), 'ETH');
+      
+      return `✅ All steps successful! Fee: ${ethers.formatEther(fee)} ETH`;
+      
+    } catch (error) {
+      console.error('❌ Debug failed at step:', error);
+      return `❌ Failed: ${error.message}`;
+    }
+  }
+
+  async testContractDirectly(): Promise<string> {
+    try {
+      console.log('🧪 Testing contract directly...');
+      
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      
+      const contractAddress = CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY;
+      console.log('📋 Contract Address:', contractAddress);
+      
+      // Use the simplified ABI (no duplicate functions)
+      const simplifiedABI = [
+        "function getEventCreationFee() external view returns (uint256)"
+      ];
+      
+      const contract = new ethers.Contract(contractAddress, simplifiedABI, this.provider);
+      
+      console.log('📞 Testing getEventCreationFee...');
+      const fee = await contract.getEventCreationFee();
+      console.log('✅ getEventCreationFee result:', fee.toString());
+      console.log('💰 Fee in ETH:', ethers.formatEther(fee), 'ETH');
+      
+      return `✅ Success! Fee: ${ethers.formatEther(fee)} ETH (${fee.toString()} wei)`;
+      
+    } catch (error) {
+      console.error('❌ Direct test failed:', error);
+      return `❌ Failed: ${error.message}`;
+    }
+  }
+
+  async checkEventCreationStatus(eventConfig: any): Promise<string> {
+    try {
+      console.log('🔍 Checking event creation status...');
+      
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      
+      const contractAddress = CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY;
+      console.log('📋 EventFactory Address:', contractAddress);
+      
+      const contract = new ethers.Contract(contractAddress, EVENT_FACTORY_ABI, this.provider);
+      
+      // Get all events
+      const allEvents = await contract.getAllEvents();
+      console.log('📋 Total events created:', allEvents.length);
+      
+      if (allEvents.length === 0) {
+        return '❌ No events found - event creation may have failed';
+      }
+      
+      // Get the latest event (should be the one just created)
+      const latestEventAddress = allEvents[allEvents.length - 1];
+      console.log('🎯 Latest event contract address:', latestEventAddress);
+      
+      // Check if this event contract exists and has the right name
+      const eventTicketContract = new ethers.Contract(latestEventAddress, EVENT_TICKET_ABI, this.provider);
+      
+      try {
+        const eventName = await eventTicketContract.name();
+        console.log('📝 Event name:', eventName);
+        
+        if (eventName === eventConfig.eventName) {
+          return `✅ Event created successfully! Contract: ${latestEventAddress.slice(0, 10)}...${latestEventAddress.slice(-8)}`;
+        } else {
+          return `⚠️ Event created but name mismatch. Expected: ${eventConfig.eventName}, Got: ${eventName}`;
+        }
+      } catch (nameError) {
+        console.log('⚠️ Could not get event name, but event contract exists');
+        return `✅ Event contract created at: ${latestEventAddress.slice(0, 10)}...${latestEventAddress.slice(-8)}`;
+      }
+      
+    } catch (error) {
+      console.error('❌ Error checking event status:', error);
+      return `❌ Failed to check event status: ${error.message}`;
+    }
   }
 }
 

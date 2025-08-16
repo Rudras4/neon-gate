@@ -32,7 +32,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
   const [account, setAccount] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
-  const [currentNetwork, setCurrentNetwork] = useState<string>('AVALANCHE_FUJI');
+  const [currentNetwork, setCurrentNetwork] = useState<string>('LOCALHOST');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -57,11 +57,31 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
   const checkConnection = async () => {
     try {
+      // Only check connection if MetaMask is available
+      if (!web3Service.isMetaMaskAvailable()) {
+        return;
+      }
+
       if (web3Service.isConnected()) {
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
           setAccount(accounts[0]);
           setIsConnected(true);
+          
+          // Get current network from MetaMask
+          const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+          const chainIdNumber = parseInt(chainId, 16);
+          setChainId(chainIdNumber);
+          
+          // Update current network based on chainId
+          if (chainIdNumber === 31337) {
+            setCurrentNetwork('LOCALHOST');
+          } else if (chainIdNumber === 43113) {
+            setCurrentNetwork('AVALANCHE_FUJI');
+          } else if (chainIdNumber === 11155111) {
+            setCurrentNetwork('SEPOLIA');
+          }
+          
           await updateWalletInfo(accounts[0]);
         }
       }
@@ -80,8 +100,22 @@ export function WalletProvider({ children }: WalletProviderProps) {
   };
 
   const handleChainChanged = (chainId: string) => {
-    setChainId(parseInt(chainId, 16));
-    setCurrentNetwork(web3Service.getCurrentNetwork());
+    const chainIdNumber = parseInt(chainId, 16);
+    setChainId(chainIdNumber);
+    
+    // Update current network based on chainId
+    if (chainIdNumber === 31337) {
+      setCurrentNetwork('LOCALHOST');
+    } else if (chainIdNumber === 43113) {
+      setCurrentNetwork('AVALANCHE_FUJI');
+    } else if (chainIdNumber === 11155111) {
+      setCurrentNetwork('SEPOLIA');
+    }
+    
+    // Update wallet info if account is connected
+    if (account) {
+      updateWalletInfo(account);
+    }
   };
 
   const updateWalletInfo = async (address: string) => {
@@ -223,15 +257,28 @@ export function WalletProvider({ children }: WalletProviderProps) {
         throw new Error('Please connect your wallet first');
       }
 
-      const txHash = await web3Service.createEvent(eventConfig);
+      const result = await web3Service.createEvent(eventConfig);
       
       // Update balance after transaction
       await updateWalletInfo(account);
       
-      return { success: true, txHash };
+      // Show success message with transaction details
+      console.log('Event created successfully!', {
+        txHash: result.txHash,
+        gasUsed: result.gasUsed,
+        totalCost: result.totalCost
+      });
+      
+      return { 
+        success: true, 
+        txHash: result.txHash,
+        gasUsed: result.gasUsed,
+        totalCost: result.totalCost
+      };
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to create event';
       setError(errorMessage);
+      console.error('Error creating event:', err);
       return { success: false, error: errorMessage };
     } finally {
       setIsCreatingEvent(false);
