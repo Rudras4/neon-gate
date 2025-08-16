@@ -1,22 +1,25 @@
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, Wallet, Menu } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
+import { useWallet } from "@/hooks/useWallet";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 export function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { isConnected, account, connectWallet, isLoading } = useWallet();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 theme-transition">
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center space-x-2">
+        <Link to="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-lg flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-sm">T3</span>
           </div>
           <span className="font-bold text-xl">TicketChain</span>
-        </div>
+        </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-6">
@@ -48,9 +51,16 @@ export function Navbar() {
           </Button>
 
           {/* Connect Wallet */}
-          <Button variant="outline" className="hidden sm:flex items-center space-x-2">
+          <Button 
+            variant="outline" 
+            className="hidden sm:flex items-center space-x-2"
+            onClick={connectWallet}
+            disabled={isLoading}
+          >
             <Wallet className="h-4 w-4" />
-            <span>Connect</span>
+            <span>
+              {isLoading ? "Connecting..." : isConnected ? `${account?.slice(0, 6)}...${account?.slice(-4)}` : "Connect"}
+            </span>
           </Button>
 
           {/* Mobile Menu */}
@@ -78,9 +88,14 @@ export function Navbar() {
             <a href="/profile" className="block py-2 text-foreground/80 hover:text-foreground">
               Profile
             </a>
-            <Button variant="outline" className="w-full mt-4">
+            <Button 
+              variant="outline" 
+              className="w-full mt-4"
+              onClick={connectWallet}
+              disabled={isLoading}
+            >
               <Wallet className="h-4 w-4 mr-2" />
-              Connect Wallet
+              {isLoading ? "Connecting..." : isConnected ? `${account?.slice(0, 6)}...${account?.slice(-4)}` : "Connect Wallet"}
             </Button>
           </div>
         </div>

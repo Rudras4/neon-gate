@@ -46,12 +46,31 @@ const EventDetails = () => {
     <div className="min-h-screen bg-background theme-transition">
       <Navbar />
       
-      <div className="pt-16">
+      <div>
+        {/* Hero Section - Full Width */}
         <EventHeader event={event} />
-        <EventInfo event={event} />
-        <EventVenue venue={event.venue} />
-        <EventTickets tickets={event.tickets} eventId={event.id} />
-        <EventAbout event={event} />
+        
+        {/* Main Content Area */}
+        <div className="container py-8">
+          <div className="grid lg:grid-cols-3 gap-8">
+            {/* Left Column - Main Content */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Image Gallery */}
+              <EventVenue venue={event.venue} />
+              
+              {/* Event Description */}
+              <EventAbout event={event} />
+            </div>
+            
+            {/* Right Column - Booking Sidebar */}
+            <div className="lg:col-span-1">
+              <div className="sticky top-24 space-y-6">
+                <EventTickets tickets={event.tickets} eventId={event.id} />
+                <EventInfo event={event} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <Footer />

@@ -10,109 +10,103 @@ Corporate Light Theme & Concert Dark Theme with Web3 aesthetics
 
 @layer base {
   :root {
-    /* Light Theme - Corporate Events */
-    --background: 0 0% 100%;
-    --foreground: 210 11% 15%;
+    /* Light Mode - Using your color palette with lighter variations */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 0 0% 0%; /* #000000 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 210 11% 15%;
+    --card: 0 0% 98%; /* Light card background */
+    --card-foreground: 0 0% 0%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 210 11% 15%;
+    --popover: 0 0% 100%; /* #FFFFFF */
+    --popover-foreground: 0 0% 0%;
 
-    /* Corporate Red Accent */
-    --primary: 354 76% 56%; /* #E63946 */
+    /* Red Accent for light mode */
+    --primary: 0 100% 50%; /* #FF0000 */
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 354 76% 65%;
+    --primary-glow: 0 100% 80%; /* Lighter glow for light mode */
 
-    --secondary: 210 17% 95%;
-    --secondary-foreground: 210 11% 15%;
+    --secondary: 0 0% 96%; /* Light secondary */
+    --secondary-foreground: 0 100% 9%; /* #170201 */
 
-    --muted: 210 17% 96%;
-    --muted-foreground: 210 7% 45%;
+    --muted: 0 0% 94%; /* Light muted */
+    --muted-foreground: 0 100% 6%; /* #1B0102 */
 
-    --accent: 354 76% 96%;
-    --accent-foreground: 354 76% 25%;
+    --accent: 0 100% 50%; /* #FF0000 */
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 210 17% 90%;
-    --input: 210 17% 95%;
-    --ring: 354 76% 56%;
+    --border: 0 0% 90%; /* Light border */
+    --input: 0 0% 96%; /* Light input */
+    --ring: 0 100% 50%;
 
     /* Design System Extensions */
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
-    --gradient-card: linear-gradient(145deg, hsl(var(--card)), hsl(210 17% 98%));
-    --shadow-glow: 0 0 30px hsl(var(--primary) / 0.3);
-    --shadow-card: 0 4px 20px hsl(210 17% 85% / 0.4);
-    --shadow-elevated: 0 8px 40px hsl(210 17% 80% / 0.5);
+    --gradient-primary: linear-gradient(135deg, #FF0000, #FF6666);
+    --gradient-card: linear-gradient(145deg, #FFFFFF, #F8F8F8);
+    --shadow-glow: 0 0 15px rgba(255, 0, 0, 0.7);
+    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.1);
+    --shadow-elevated: 0 8px 40px rgba(0, 0, 0, 0.15);
 
     --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-primary: 0 100% 50%; /* #FF0000 */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 94%;
+    --sidebar-accent-foreground: 0 100% 9%; /* #170201 */
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 0 100% 50%;
   }
 
   .dark {
-    /* Dark Theme - Concert/Party Events */
-    --background: 0 0% 6%;
-    --foreground: 0 0% 95%;
+    /* Dark Mode - Using your exact color palette */
+    --background: 0 0% 0%; /* #000000 */
+    --foreground: 0 0% 100%; /* #FFFFFF */
 
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 95%;
+    --card: 0 100% 5%; /* #190101 */
+    --card-foreground: 0 0% 100%;
 
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 0 100% 5%; /* #190101 */
+    --popover-foreground: 0 0% 100%;
 
-    /* Neon Red Accent */
-    --primary: 348 100% 61%; /* #FF1744 */
-    --primary-foreground: 0 0% 6%;
-    --primary-glow: 348 100% 70%;
+    /* Deep Red Accent */
+    --primary: 0 100% 50%; /* #FF0000 */
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 0 100% 60%;
 
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 90%;
+    --secondary: 0 100% 9%; /* #170201 */
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 0 100% 6%; /* #1B0102 */
+    --muted-foreground: 0 0% 70%;
 
-    --accent: 348 100% 15%;
-    --accent-foreground: 348 100% 85%;
+    --accent: 0 100% 50%; /* #FF0000 */
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 100% 65%;
-    --destructive-foreground: 0 0% 6%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 15%;
-    --input: 0 0% 12%;
-    --ring: 348 100% 61%;
+    --border: 0 100% 9%; /* #170201 */
+    --input: 0 100% 5%; /* #190101 */
+    --ring: 0 100% 50%;
 
-    /* Dark Theme Design Extensions */
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
-    --gradient-card: linear-gradient(145deg, hsl(var(--card)), hsl(0 0% 10%));
-    --shadow-glow: 0 0 40px hsl(var(--primary) / 0.5);
-    --shadow-card: 0 4px 25px hsl(0 0% 0% / 0.6);
-    --shadow-elevated: 0 8px 50px hsl(0 0% 0% / 0.8);
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* Design System Extensions */
+    --gradient-primary: linear-gradient(135deg, #FF0000, #170201);
+    --gradient-card: linear-gradient(145deg, #190101, #1B0102);
+    --shadow-glow: 0 0 10px rgba(255, 0, 0, 0.6);
+    --shadow-card: 0 4px 20px rgba(23, 2, 1, 0.6);
+    --shadow-elevated: 0 8px 40px rgba(0, 0, 0, 0.8);
+
+    --sidebar-background: 0 100% 5%; /* #190101 */
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 100% 50%; /* #FF0000 */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 0 100% 9%; /* #170201 */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 100% 9%; /* #170201 */
+    --sidebar-ring: 0 100% 50%;
   }
 }
 
@@ -160,7 +154,7 @@ Corporate Light Theme & Concert Dark Theme with Web3 aesthetics
 
   /* Web3 Glow Text */
   .text-glow {
-    text-shadow: 0 0 20px hsl(var(--primary) / 0.5);
+    text-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
   }
 
   /* Theme Transition */

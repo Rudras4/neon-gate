@@ -33,24 +33,27 @@ const Events = () => {
         </div>
       </section>
 
-      {/* Search and Filter Section */}
-      <section className="py-8 border-b">
+      {/* Main Content with Sidebar Layout */}
+      <section className="py-8">
         <div className="container">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <EventFilters 
-              filters={filters}
-              onFiltersChange={setFilters}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
-          </div>
-        </div>
-      </section>
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Left Sidebar - Filters */}
+            <div className="lg:w-80 lg:flex-shrink-0">
+              <div className="sticky top-24">
+                <EventFilters 
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                />
+              </div>
+            </div>
 
-      {/* Events Grid */}
-      <section className="py-12">
-        <div className="container">
-          <EventGrid searchQuery={searchQuery} filters={filters} />
+            {/* Right Content - Events Grid */}
+            <div className="flex-1">
+              <EventGrid searchQuery={searchQuery} filters={filters} />
+            </div>
+          </div>
         </div>
       </section>
 

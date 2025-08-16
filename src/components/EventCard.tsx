@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, Users, Star } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface EventCardProps {
+  id?: string;
   title: string;
   description: string;
   date: string;
@@ -15,6 +17,7 @@ interface EventCardProps {
 }
 
 export function EventCard({
+  id,
   title,
   description,
   date,
@@ -26,6 +29,15 @@ export function EventCard({
   maxAttendees,
   isPopular = false,
 }: EventCardProps) {
+  const navigate = useNavigate();
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on the Buy Ticket button
+    if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    navigate(`/events/${id}`);
+  };
   const tierColors = {
     Platinum: "bg-gradient-to-r from-slate-400 to-slate-600",
     Gold: "bg-gradient-to-r from-yellow-400 to-yellow-600",
@@ -34,7 +46,7 @@ export function EventCard({
   };
 
   return (
-    <div className="card-elevated group cursor-pointer">
+    <div className="card-elevated group cursor-pointer" onClick={handleCardClick}>
       {/* Image */}
       <div className="relative overflow-hidden rounded-t-xl">
         <img

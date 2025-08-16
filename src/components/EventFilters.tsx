@@ -36,15 +36,15 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
   const quickCategories = ["Concert", "Conference", "Festival", "Workshop"];
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-4">
       {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search events by name..."
+          placeholder="Search events..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10 h-12 text-base"
+          className="pl-10 h-10 text-sm"
         />
       </div>
 
@@ -54,7 +54,7 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
           <Badge
             key={category}
             variant={filters.category === category ? "default" : "outline"}
-            className="cursor-pointer hover:scale-105 transition-transform px-4 py-2"
+            className="cursor-pointer hover:scale-105 transition-transform px-3 py-1 text-xs"
             onClick={() => updateFilter("category", filters.category === category ? "" : category)}
           >
             {category}
@@ -75,7 +75,7 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
       </div>
 
       {/* Filter Panel */}
-      <div className={`${isFilterOpen || "hidden lg:block"} space-y-6 card-elevated p-6`}>
+      <div className={`${isFilterOpen || "hidden lg:block"} space-y-4 card-elevated p-4`}>
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Filters</h3>
           <Button variant="ghost" size="sm" onClick={() => setIsFilterOpen(false)} className="lg:hidden">
@@ -83,7 +83,7 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+        <div className="space-y-4">
           {/* Location */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -215,7 +215,7 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
                   initialFocus
                   mode="range"
                   defaultMonth={dateRange.from}
-                  selected={dateRange.from && dateRange.to ? dateRange : undefined}
+                  selected={dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined}
                   onSelect={(range) => setDateRange(range || {})}
                   numberOfMonths={2}
                   className="pointer-events-auto"

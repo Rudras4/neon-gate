@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
 	darkMode: ["class"],
@@ -22,6 +23,15 @@ export default {
 				inter: ['Inter', 'sans-serif'],
 			},
 			colors: {
+				// Custom dark red palette
+				'deep-black': '#000000',
+				'pure-white': '#FFFFFF',
+				'dark-red-1': '#170201',
+				'dark-red-2': '#190101', 
+				'dark-red-3': '#1B0102',
+				'deep-red': '#010000',
+				'highlight-blue': '#001111',
+				'bright-red': '#FF0000',
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
@@ -96,5 +106,5 @@ export default {
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [tailwindcssAnimate],
 } satisfies Config;

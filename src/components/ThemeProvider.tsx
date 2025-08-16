@@ -15,17 +15,29 @@ const ThemeProviderContext = createContext<ThemeProviderContextType | undefined>
 export function ThemeProvider({
   children,
   defaultTheme = "light",
+  storageKey = "vite-ui-theme",
 }: {
   children: React.ReactNode;
   defaultTheme?: Theme;
+  storageKey?: string;
 }) {
-  const [theme, setTheme] = useState<Theme>(defaultTheme);
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(storageKey);
+      return (stored as Theme) || defaultTheme;
+    }
+    return defaultTheme;
+  });
 
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
-  }, [theme]);
+    
+    if (typeof window !== "undefined") {
+      localStorage.setItem(storageKey, theme);
+    }
+  }, [theme, storageKey]);
 
   const toggleTheme = () => {
     setTheme(theme === "light" ? "dark" : "light");

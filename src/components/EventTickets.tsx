@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Wallet, Users, Star, Award } from "lucide-react";
+import { Wallet, Users, Star, Award, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useWallet } from "@/hooks/useWallet";
 
 interface Ticket {
   tier: string;
@@ -32,6 +33,10 @@ const tierColors = {
 
 export function EventTickets({ tickets, eventId }: EventTicketsProps) {
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  const [purchaseStatus, setPurchaseStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [txHash, setTxHash] = useState<string | null>(null);
+  
+  const { isConnected, connectWallet, purchaseTicket, isPurchasing, account, balance, isLoading } = useWallet();
 
   const resaleTickets = [
     { id: "nft-001", seller: "0x1234...5678", price: "120", tier: "Gold", seatNumber: "A-15" },
@@ -39,127 +44,219 @@ export function EventTickets({ tickets, eventId }: EventTicketsProps) {
     { id: "nft-003", seller: "0x5555...9999", price: "80", tier: "Silver", seatNumber: "B-22" },
   ];
 
-  return (
-    <section className="py-12 bg-accent/5">
-      <div className="container">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold mb-8 text-center">Get Your Tickets</h2>
-          
-          <Tabs defaultValue="organizer" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="organizer">Buy from Organizer</TabsTrigger>
-              <TabsTrigger value="resale">P2P Resale</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="organizer" className="space-y-6">
-              {/* Ticket Tiers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {tickets.map((ticket) => {
-                  const Icon = tierIcons[ticket.tier as keyof typeof tierIcons] || Users;
-                  const isSelected = selectedTicket === ticket.tier;
-                  const isAvailable = ticket.available > 0;
-                  
-                  return (
-                    <div
-                      key={ticket.tier}
-                      className={`card-elevated p-6 cursor-pointer transition-all ${
-                        isSelected ? 'ring-2 ring-primary' : ''
-                      } ${!isAvailable ? 'opacity-50' : ''}`}
-                      onClick={() => isAvailable && setSelectedTicket(ticket.tier)}
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full ${tierColors[ticket.tier as keyof typeof tierColors]} flex items-center justify-center`}>
-                            <Icon className="h-5 w-5 text-white" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold">{ticket.tier}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {ticket.available} of {ticket.total} available
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-primary">{ticket.price}</p>
-                          <p className="text-sm text-muted-foreground">AVAX</p>
-                        </div>
-                      </div>
-                      
-                      {!isAvailable && (
-                        <Badge variant="destructive" className="w-full justify-center">
-                          Sold Out
-                        </Badge>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+  const handlePurchase = async () => {
+    if (!selectedTicket) return;
+    
+    const ticket = tickets.find(t => t.tier === selectedTicket);
+    if (!ticket) return;
 
-              {/* Purchase Section */}
-              {selectedTicket && (
-                <div className="card-elevated p-6 space-y-4">
-                  <h3 className="text-xl font-semibold">Purchase {selectedTicket} Ticket</h3>
-                  <div className="flex items-center justify-between">
-                    <span>Price:</span>
-                    <span className="text-xl font-bold text-primary">
-                      {tickets.find(t => t.tier === selectedTicket)?.price} AVAX
-                    </span>
-                  </div>
-                  <Button className="w-full btn-hero" size="lg">
-                    <Wallet className="h-5 w-5 mr-2" />
-                    Connect Wallet & Buy
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Your ticket will be minted as an NFT and transferred to your wallet
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="resale" className="space-y-6">
-              <div className="text-center mb-6">
-                <p className="text-muted-foreground">
-                  Buy verified NFT tickets from other attendees at market prices
-                </p>
-              </div>
+    const result = await purchaseTicket(selectedTicket, ticket.price);
+    
+    if (result.success) {
+      setPurchaseStatus('success');
+      setTxHash(result.txHash || null);
+      // Reset after 5 seconds
+      setTimeout(() => {
+        setPurchaseStatus('idle');
+        setSelectedTicket(null);
+        setTxHash(null);
+      }, 5000);
+    } else {
+      setPurchaseStatus('error');
+      setTimeout(() => setPurchaseStatus('idle'), 3000);
+    }
+  };
+
+  return (
+    <div id="tickets-section" className="space-y-6">
+      <h2 className="text-2xl font-bold mb-4">Get Your Tickets</h2>
+      
+      <Tabs defaultValue="organizer" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="organizer">Buy from Organizer</TabsTrigger>
+          <TabsTrigger value="resale">P2P Resale</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="organizer" className="space-y-4">
+          {/* Ticket Tiers */}
+          <div className="space-y-3">
+            {tickets.map((ticket) => {
+              const Icon = tierIcons[ticket.tier as keyof typeof tierIcons] || Users;
+              const isSelected = selectedTicket === ticket.tier;
+              const isAvailable = ticket.available > 0;
               
-              <div className="space-y-4">
-                {resaleTickets.map((ticket) => (
-                  <div key={ticket.id} className="card-elevated p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">{ticket.tier}</Badge>
-                          <span className="font-medium">Seat {ticket.seatNumber}</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          NFT ID: {ticket.id}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Seller: {ticket.seller}
-                        </p>
+              return (
+                <div
+                  key={ticket.tier}
+                  className={`bg-card border rounded-lg p-4 cursor-pointer transition-all ${
+                    isSelected ? 'ring-2 ring-primary' : ''
+                  } ${!isAvailable ? 'opacity-50' : ''}`}
+                  onClick={() => isAvailable && setSelectedTicket(ticket.tier)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full ${tierColors[ticket.tier as keyof typeof tierColors]} flex items-center justify-center`}>
+                        <Icon className="h-4 w-4 text-white" />
                       </div>
-                      <div className="text-right space-y-2">
-                        <div>
-                          <p className="text-2xl font-bold text-primary">{ticket.price}</p>
-                          <p className="text-sm text-muted-foreground">AVAX</p>
-                        </div>
-                        <Button>Buy Now</Button>
+                      <div>
+                        <h3 className="text-sm font-semibold">{ticket.tier}</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {ticket.available} of {ticket.total} available
+                        </p>
                       </div>
                     </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-primary">{ticket.price}</p>
+                      <p className="text-xs text-muted-foreground">AVAX</p>
+                    </div>
                   </div>
-                ))}
+                  
+                  {!isAvailable && (
+                    <Badge variant="destructive" className="w-full justify-center mt-2">
+                      Sold Out
+                    </Badge>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Purchase Section */}
+          {selectedTicket && (
+            <div id="tickets-section" className="bg-card border rounded-lg p-6 space-y-6">
+              <h3 className="text-lg font-semibold">Purchase {selectedTicket} Ticket</h3>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Price:</span>
+                <span className="text-lg font-bold text-primary">
+                  {tickets.find(t => t.tier === selectedTicket)?.price} AVAX
+                </span>
               </div>
+              {!isConnected ? (
+                <Button 
+                  onClick={connectWallet} 
+                  disabled={isLoading}
+                  className="w-full btn-hero"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Wallet className="h-4 w-4 mr-2" />
+                  )}
+                  {isLoading ? 'Connecting...' : 'Connect Wallet'}
+                </Button>
+              ) : purchaseStatus === 'success' ? (
+                <div className="text-center space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-green-600">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="font-semibold">Purchase Successful!</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    <p>Your NFT ticket has been minted</p>
+                    {txHash && (
+                      <p className="break-all mt-1">
+                        TX: {txHash.substring(0, 10)}...{txHash.substring(txHash.length - 8)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : purchaseStatus === 'error' ? (
+                <div className="text-center space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-red-600">
+                    <AlertCircle className="h-5 w-5" />
+                    <span className="font-semibold">Purchase Failed</span>
+                  </div>
+                  <Button 
+                    onClick={handlePurchase}
+                    disabled={isPurchasing}
+                    className="w-full btn-hero"
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              ) : (
+                <Button 
+                  onClick={handlePurchase}
+                  disabled={isPurchasing || !selectedTicket}
+                  className="w-full btn-hero"
+                >
+                  {isPurchasing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="h-4 w-4 mr-2" />
+                      Buy Ticket
+                    </>
+                  )}
+                </Button>
+              )}
               
-              {resaleTickets.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No resale tickets available at the moment</p>
+              {/* Wallet Info */}
+              {isConnected && account && (
+                <div className="text-xs text-muted-foreground text-center space-y-1">
+                  <p>Connected: {account.substring(0, 6)}...{account.substring(account.length - 4)}</p>
+                  {balance && <p>Balance: {parseFloat(balance).toFixed(4)} AVAX</p>}
                 </div>
               )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
-    </section>
+              <p className="text-xs text-muted-foreground text-center">
+                Your ticket will be minted as an NFT and transferred to your wallet
+              </p>
+            </div>
+          )}
+        </TabsContent>
+            
+        <TabsContent value="resale" className="space-y-4">
+          <div className="text-center mb-4">
+            <p className="text-sm text-muted-foreground">
+              Buy verified NFT tickets from other attendees at market prices
+            </p>
+          </div>
+          
+          <div className="space-y-3">
+            {resaleTickets.map((ticket) => (
+              <div key={ticket.id} className="bg-card border rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">{ticket.tier}</Badge>
+                      <span className="text-sm font-medium">Seat {ticket.seatNumber}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      NFT ID: {ticket.id}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Seller: {ticket.seller}
+                    </p>
+                  </div>
+                  <div className="text-right space-y-2">
+                    <div>
+                      <p className="text-lg font-bold text-primary">{ticket.price}</p>
+                      <p className="text-xs text-muted-foreground">AVAX</p>
+                    </div>
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        // Handle P2P purchase logic here
+                        alert(`Purchasing ${ticket.tier} ticket from ${ticket.seller} for ${ticket.price} AVAX`);
+                      }}
+                    >
+                      Buy Now
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {resaleTickets.length === 0 && (
+            <div className="text-center py-6">
+              <p className="text-sm text-muted-foreground">No resale tickets available at the moment</p>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

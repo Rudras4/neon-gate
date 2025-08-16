@@ -1,5 +1,6 @@
 import { EventCard } from "@/components/EventCard";
-import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState, useMemo } from "react";
 
 interface EventGridProps {
   searchQuery: string;
@@ -104,36 +105,59 @@ const mockEvents = [
 export function EventGrid({ searchQuery, filters }: EventGridProps) {
   const [sortBy, setSortBy] = useState("date");
 
-  // Filter events based on search and filters
-  const filteredEvents = mockEvents.filter((event) => {
-    // Search filter
-    if (searchQuery && !event.title.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
+  // Filter and sort events
+  const filteredAndSortedEvents = useMemo(() => {
+    // First filter events
+    let filtered = mockEvents.filter((event) => {
+      // Search filter
+      if (searchQuery && !event.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
 
-    // Category filter
-    if (filters.category && event.category !== filters.category) {
-      return false;
-    }
+      // Location filter
+      if (filters.location && !event.location.includes(filters.location)) {
+        return false;
+      }
 
-    // Language filter
-    if (filters.language && event.language !== filters.language) {
-      return false;
-    }
+      // Category filter
+      if (filters.category && event.category !== filters.category) {
+        return false;
+      }
 
-    // Type filter
-    if (filters.type && event.type !== filters.type) {
-      return false;
-    }
+      // Language filter
+      if (filters.language && event.language !== filters.language) {
+        return false;
+      }
 
-    // Price filter
-    const eventPrice = parseInt(event.price);
-    if (eventPrice < filters.priceRange[0] || eventPrice > filters.priceRange[1]) {
-      return false;
-    }
+      // Type filter
+      if (filters.type && event.type !== filters.type) {
+        return false;
+      }
 
-    return true;
-  });
+      // Price filter
+      const eventPrice = parseInt(event.price);
+      if (eventPrice < filters.priceRange[0] || eventPrice > filters.priceRange[1]) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Then sort events
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "price":
+          return parseInt(a.price) - parseInt(b.price);
+        case "popularity":
+          return b.attendees - a.attendees;
+        case "date":
+        default:
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+      }
+    });
+
+    return filtered;
+  }, [searchQuery, filters, sortBy]);
 
   return (
     <div className="space-y-6">
@@ -141,7 +165,7 @@ export function EventGrid({ searchQuery, filters }: EventGridProps) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold">
-            {filteredEvents.length} Event{filteredEvents.length !== 1 ? 's' : ''} Found
+            {filteredAndSortedEvents.length} Event{filteredAndSortedEvents.length !== 1 ? 's' : ''} Found
           </h2>
           {searchQuery && (
             <p className="text-muted-foreground">
@@ -150,31 +174,24 @@ export function EventGrid({ searchQuery, filters }: EventGridProps) {
           )}
         </div>
         
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="px-4 py-2 border rounded-md bg-background text-foreground"
-        >
-          <option value="date">Sort by Date</option>
-          <option value="price">Sort by Price</option>
-          <option value="popularity">Sort by Popularity</option>
-        </select>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="date">Sort by Date</SelectItem>
+            <SelectItem value="price">Sort by Price (Low to High)</SelectItem>
+            <SelectItem value="popularity">Sort by Popularity</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Events Grid */}
-      {filteredEvents.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
-            <div key={event.id} className="group">
+      {filteredAndSortedEvents.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredAndSortedEvents.map((event) => (
+            <div key={event.id}>
               <EventCard {...event} />
-              <div className="mt-4 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <a
-                  href={`/events/${event.id}`}
-                  className="inline-block w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                >
-                  View Details
-                </a>
-              </div>
             </div>
           ))}
         </div>
