@@ -7,7 +7,6 @@ import { EventTickets } from "@/components/EventTickets";
 import { EventAbout } from "@/components/EventAbout";
 import { useParams } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { eventsAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const EventDetails = () => {
@@ -118,7 +117,7 @@ const EventDetails = () => {
     return images;
   };
 
-  // Fetch event data from backend
+  // Fetch event data directly from backend
   useEffect(() => {
     const fetchEvent = async () => {
       if (!id) return;
@@ -126,19 +125,26 @@ const EventDetails = () => {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await eventsAPI.getById(id) as { event: any };
         
-        console.log('🔍 Raw event data from backend:', response.event);
+        // Fetch directly from backend API
+        const response = await fetch(`http://localhost:5000/api/events/${id}`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('🔍 Raw event data from backend:', data.event);
         console.log('🔍 Web3 fields:', {
-          event_source: response.event.event_source,
-          event_type: response.event.event_type,
-          blockchain_tx_hash: response.event.blockchain_tx_hash,
-          tier_prices: response.event.tier_prices,
-          tier_quantities: response.event.tier_quantities
+          event_source: data.event.event_source,
+          event_type: data.event.event_type,
+          blockchain_tx_hash: data.event.blockchain_tx_hash,
+          tier_prices: data.event.tier_prices,
+          tier_quantities: data.event.tier_quantities
         });
         
-        setEvent(response.event);
-      } catch (err) {
+        setEvent(data.event);
+      } catch (err: any) {
         console.error('Error fetching event:', err);
         setError('Failed to load event details');
         toast({
@@ -304,15 +310,15 @@ const EventDetails = () => {
             {/* Right Column - Booking Sidebar */}
             <div className="lg:col-span-1">
               <div className="sticky top-24 space-y-6">
-                                 <div id="tickets-section">
-                   <EventTickets 
-                     tickets={transformedEvent.tickets} 
-                     eventId={transformedEvent.id}
-                     isWeb3Event={transformedEvent.isWeb3Event}
-                     blockchainTxHash={transformedEvent.blockchainTxHash}
-                     eventContractAddress={transformedEvent.eventContractAddress}
-                   />
-                 </div>
+                <div id="tickets-section">
+                  <EventTickets 
+                    tickets={transformedEvent.tickets} 
+                    eventId={transformedEvent.id}
+                    isWeb3Event={transformedEvent.isWeb3Event}
+                    blockchainTxHash={transformedEvent.blockchainTxHash}
+                    eventContractAddress={transformedEvent.eventContractAddress}
+                  />
+                </div>
                 <EventInfo event={transformedEvent} />
               </div>
             </div>

@@ -18,6 +18,7 @@ export const EVENT_FACTORY_ABI = [
 
 export const EVENT_TICKET_ABI = [
   "function mintTicket(address to, uint256 seatNumber, string memory tierName, string memory metadataURI) external returns (uint256)",
+  "function buyTicket(string memory tierName, string memory metadataURI) external payable returns (uint256)",
   "function mintInitialTickets(uint256[] memory tierQuantities, address organizer) external",
   "function getTicket(uint256 tokenId) external view returns (tuple(uint256 tokenId, uint256 seatNumber, string tier, string metadataURI, address owner, bool exists))",
   "function getSeatNumber(uint256 tokenId) external view returns (uint256)",
@@ -85,8 +86,8 @@ export const NETWORKS = {
 // Contract addresses (updated after deployment)
 export const CONTRACT_ADDRESSES = {
   LOCALHOST: {
-    EVENT_FACTORY: '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707',
-    TICKET_RESALE: '0x0165878A594ca255338adfa4d48449f69242Eb8F',
+    EVENT_FACTORY: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+    TICKET_RESALE: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
   },
   AVALANCHE_FUJI: {
     EVENT_FACTORY: '0x...', // Will be populated after deployment
@@ -453,6 +454,53 @@ export class Web3Service {
     });
     
     return receipt.transactionHash;
+  }
+
+  // ✅ ADD: buyTicket function for purchasing tickets
+  async buyTicket(eventContractAddress: string, tier: string, metadataURI: string, price: string): Promise<string> {
+    if (!this.signer) {
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      if (!this.signer) {
+        throw new Error('Signer not initialized');
+      }
+    }
+
+    const contract = new ethers.Contract(eventContractAddress, EVENT_TICKET_ABI, this.signer);
+    
+    try {
+      // ✅ FIX: Ensure price is in wei and handle payment
+      const priceInWei = typeof price === 'string' ? ethers.parseEther(price) : price;
+      
+      console.log('🎫 Purchasing ticket:', {
+        eventContract: eventContractAddress,
+        tier,
+        metadataURI,
+        price: priceInWei.toString(),
+        priceInEth: ethers.formatEther(priceInWei)
+      });
+      
+      // Call buyTicket with payment
+      const tx = await contract.buyTicket(tier, metadataURI, { value: priceInWei });
+      console.log('📤 Transaction sent:', tx.hash);
+      
+      const receipt = await tx.wait();
+      console.log('✅ Transaction confirmed');
+      
+      // Track the transaction
+      await transactionTracker.trackTransaction(receipt.transactionHash, 'TICKET_PURCHASE', {
+        eventContract: eventContractAddress,
+        tier,
+        metadataURI,
+        price: priceInWei.toString()
+      });
+      
+      return receipt.transactionHash;
+    } catch (error) {
+      console.error('❌ Ticket purchase failed:', error);
+      throw error;
+    }
   }
 
   async listTicketForResale(eventContractAddress: string, tokenId: number, price: string): Promise<string> {

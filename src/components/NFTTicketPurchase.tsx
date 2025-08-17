@@ -47,9 +47,7 @@ export const NFTTicketPurchase: React.FC<NFTTicketPurchaseProps> = ({
     eventContractAddress: eventContractAddress?.substring(0, 10) + '...'
   });
 
-  // Check if this is a placeholder contract address (for testing)
-  const isPlaceholderContract = eventContractAddress === '0x1234567890123456789012345678901234567890';
-
+  // Validate contract address
   if (!eventContractAddress || eventContractAddress === '') {
     return (
       <Card className="border-red-200 bg-red-50">
@@ -68,26 +66,19 @@ export const NFTTicketPurchase: React.FC<NFTTicketPurchaseProps> = ({
     );
   }
 
-  // Check if this is a placeholder contract (for testing)
-  if (isPlaceholderContract) {
+  // Validate contract address format
+  if (!eventContractAddress.startsWith('0x') || eventContractAddress.length !== 42) {
     return (
-      <Card className="border-orange-200 bg-orange-50">
+      <Card className="border-red-200 bg-red-50">
         <CardHeader>
-          <CardTitle className="text-orange-800">⚠️ Test Contract Address</CardTitle>
+          <CardTitle className="text-red-800">❌ Invalid Contract Address</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-orange-700 text-sm">
-            This event is using a test contract address for UI demonstration purposes.
+          <p className="text-red-700 text-sm">
+            The contract address for this event is not in the correct format.
           </p>
-          <div className="mt-2 text-xs text-orange-600">
+          <div className="mt-2 text-xs text-red-600">
             Contract Address: {eventContractAddress}
-          </div>
-          <div className="mt-3 p-3 bg-orange-100 rounded-md">
-            <p className="text-orange-800 text-sm font-medium">🚀 To test real functionality:</p>
-            <ul className="text-orange-700 text-xs mt-1 space-y-1">
-              <li>• Create a new Web3 event (this will use a real contract address)</li>
-              <li>• Or update this event with its actual blockchain contract address</li>
-            </ul>
           </div>
         </CardContent>
       </Card>
@@ -113,15 +104,15 @@ export const NFTTicketPurchase: React.FC<NFTTicketPurchaseProps> = ({
   const eventTicketABI = EVENT_TICKET_ABI;
 
   useEffect(() => {
-    if (isWeb3Event && eventContractAddress && isConnected && !isPlaceholderContract) {
+    if (isWeb3Event && eventContractAddress && isConnected) {
       fetchTierData();
     }
-  }, [isWeb3Event, eventContractAddress, isConnected, isPlaceholderContract]);
+  }, [isWeb3Event, eventContractAddress, isConnected]);
 
   const fetchTierData = async () => {
-    // Don't fetch data for placeholder contracts
-    if (isPlaceholderContract) {
-      console.log('⚠️ Skipping tier data fetch for placeholder contract');
+    // Validate contract address before fetching
+    if (!eventContractAddress || !eventContractAddress.startsWith('0x')) {
+      console.log('⚠️ Skipping tier data fetch for invalid contract address');
       return;
     }
 
@@ -187,11 +178,11 @@ export const NFTTicketPurchase: React.FC<NFTTicketPurchaseProps> = ({
       return;
     }
 
-    // Prevent interaction with placeholder contracts
-    if (isPlaceholderContract) {
+    // Validate contract address before proceeding
+    if (!eventContractAddress || !eventContractAddress.startsWith('0x')) {
       toast({
-        title: "Test Contract Address",
-        description: "This is a placeholder address for UI testing. Create a new Web3 event to test real functionality.",
+        title: "Invalid Contract Address",
+        description: "This event does not have a valid contract address. Please contact the event organizer.",
         variant: "destructive",
       });
       return;
@@ -217,7 +208,7 @@ export const NFTTicketPurchase: React.FC<NFTTicketPurchaseProps> = ({
       const signer = await provider.getSigner();
       console.log('🔧 Signer obtained:', !!signer);
       
-      const contract = new ethers.Contract(eventContractAddress, eventTicketABI, signer);
+      const contract = new ethers.Contract(eventContractAddress, EVENT_TICKET_ABI, signer);
       console.log('🔧 Contract instance created');
 
       // Get tier price from contract

@@ -1,5 +1,8 @@
 import { ethers } from "hardhat";
 
+// Import the proper contract factory
+import { EventTicket__factory } from '../typechain-types/factories/contracts/EventTicket__factory';
+
 async function main() {
   console.log("🔍 Testing Frontend Functions...\n");
 
@@ -23,8 +26,8 @@ async function main() {
 
   // Test EventTicket contract functions
   console.log("🎫 Testing EventTicket Contract Functions...");
-  const EventTicket = await ethers.getContractFactory("EventTicket");
-  const eventTicket = EventTicket.attach(eventTicketAddress);
+  // Use the typed factory instead of ethers.getContractFactory
+  const eventTicket = EventTicket__factory.connect(eventTicketAddress, user1);
 
   try {
     // Test getTier function
@@ -68,7 +71,8 @@ async function main() {
     const metadataURI = `ipfs://QmTestTicket_${Date.now()}`;
     
     console.log("   📝 Attempting to buy a General ticket...");
-    const buyTx = await eventTicket.connect(user1).buyTicket(
+    // Now buyTicket is properly typed
+    const buyTx = await eventTicket.buyTicket(
       "General",
       metadataURI,
       { value: ethers.parseEther("0.01") }
@@ -80,7 +84,8 @@ async function main() {
     console.log("   🎫 Transaction hash:", receipt?.hash);
     
     // Get the new ticket details
-    const newTicketId = totalMinted.toNumber() + 1;
+    // Convert bigint to number using Number() instead of .toNumber()
+    const newTicketId = Number(totalMinted) + 1;
     const newTicket = await eventTicket.getTicket(newTicketId);
     console.log("   📋 New ticket details:", {
       tokenId: newTicket.tokenId.toString(),

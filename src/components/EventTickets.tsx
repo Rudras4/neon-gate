@@ -11,6 +11,7 @@ import { ethers } from 'ethers';
 import { NFTTicketPurchase } from './NFTTicketPurchase';
 import { NFTTicketResale } from './NFTTicketResale';
 import { NFTTicketDashboard } from './NFTTicketDashboard';
+import { EventTicket__factory } from '../../typechain-types/factories/contracts/EventTicket__factory';
 
 interface Ticket {
   tier: string;
@@ -40,7 +41,7 @@ export const EventTickets: React.FC<EventTicketsProps> = ({
   const [isPurchasing, setIsPurchasing] = useState(false);
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const { isConnected, currentNetwork, account } = useWallet();
+  const { isConnected, currentNetwork, account, purchaseTicket } = useWallet();
 
   const handlePurchase = async (ticket: Ticket) => {
     if (!isAuthenticated) {
@@ -62,66 +63,29 @@ export const EventTickets: React.FC<EventTicketsProps> = ({
   };
 
   const handleWeb3Purchase = async (ticket: Ticket) => {
-    if (!isConnected) {
-      toast({
-        title: "Wallet Not Connected",
-        description: "Please connect your wallet to purchase Web3 tickets",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!eventContractAddress) {
-      toast({
-        title: "Contract Not Found",
-        description: "Event contract address not available",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setSelectedTicket(ticket);
-    setIsPurchasing(true);
-
     try {
-      // Get wallet provider and signer
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
+      setIsPurchasing(true);
       
-      // Create contract instance
-      const contract = new ethers.Contract(
+      if (!isConnected || !eventContractAddress) {
+        throw new Error('Wallet not connected or event contract not found');
+      }
+
+      // Use the purchaseTicket method from useWallet hook instead
+      const result = await purchaseTicket(
         eventContractAddress,
-        [
-          "function buyTicket(string tierName, string metadataURI) external payable returns (uint256)",
-          "function getTier(string tierName) external view returns (tuple(string name, uint256 price, uint256 quantity, uint256 minted, bool exists))"
-        ],
-        signer
+        ticket.tier,
+        0, // seatNumber - will be auto-assigned
+        ticket.price
       );
 
-      // Get tier price from contract
-      const tierInfo = await contract.getTier(ticket.tier);
-      const tierPrice = tierInfo.price;
-      
-      // Create metadata URI for the ticket
-      const metadataURI = `ipfs://Qm${ticket.tier.toLowerCase()}Ticket_${Date.now()}`;
-      
-      // Purchase ticket
-      const tx = await contract.buyTicket(ticket.tier, metadataURI, {
-        value: tierPrice
-      });
-
-      toast({
-        title: "Transaction Submitted",
-        description: "Your ticket purchase is being processed on the blockchain",
-      });
-
-      // Wait for confirmation
-      const receipt = await tx.wait();
-      
-      toast({
-        title: "Purchase Successful! 🎉",
-        description: `You've successfully purchased a ${ticket.tier} ticket! Transaction: ${receipt.hash.substring(0, 10)}...`,
-      });
+      if (result.success) {
+        toast({
+          title: "Purchase Successful! 🎉",
+          description: `You've successfully purchased a ${ticket.tier} ticket! Transaction: ${result.txHash?.substring(0, 10)}...`,
+        });
+      } else {
+        throw new Error(result.error || 'Purchase failed');
+      }
 
       // Reset form
       setSelectedTicket(null);

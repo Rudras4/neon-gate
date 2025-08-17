@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integration Test</title>
+</head>
+<body>
+    <h1>Backend API Integration Test</h1>
+    
+    <div id="status">Testing...</div>
+    <div id="events"></div>
+    
+    <script>
+        async function testBackendIntegration() {
+            const statusDiv = document.getElementById('status');
+            const eventsDiv = document.getElementById('events');
+            
+            try {
+                statusDiv.textContent = 'Testing backend connection...';
+                
+                // Test 1: Health check
+                const healthResponse = await fetch('http://localhost:5000/api/health');
+                if (!healthResponse.ok) {
+                    throw new Error(`Health check failed: ${healthResponse.status}`);
+                }
+                statusDiv.textContent = '✅ Backend health check passed';
+                
+                // Test 2: Fetch events
+                statusDiv.textContent = 'Fetching events from backend...';
+                const eventsResponse = await fetch('http://localhost:5000/api/events?includeNFTStats=true');
+                if (!eventsResponse.ok) {
+                    throw new Error(`Events fetch failed: ${eventsResponse.status}`);
+                }
+                
+                const data = await eventsResponse.json();
+                statusDiv.textContent = `✅ Successfully fetched ${data.events.length} events from backend`;
+                
+                // Display events
+                eventsDiv.innerHTML = '<h2>Events from Backend:</h2>';
+                data.events.forEach(event => {
+                    const eventDiv = document.createElement('div');
+                    eventDiv.style.border = '1px solid #ccc';
+                    eventDiv.style.margin = '10px';
+                    eventDiv.style.padding = '10px';
+                    eventDiv.innerHTML = `
+                        <h3>${event.title}</h3>
+                        <p><strong>Source:</strong> ${event.event_source}</p>
+                        <p><strong>Contract:</strong> ${event.event_contract_address || 'None'}</p>
+                        <p><strong>Blockchain TX:</strong> ${event.blockchain_tx_hash || 'None'}</p>
+                        <p><strong>Organizer:</strong> ${event.organizer_name || 'Unknown'}</p>
+                    `;
+                    eventsDiv.appendChild(eventDiv);
+                });
+                
+            } catch (error) {
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                console.error('Integration test failed:', error);
+            }
+        }
+        
+        // Run test when page loads
+        testBackendIntegration();
+    </script>
+</body>
+</html>

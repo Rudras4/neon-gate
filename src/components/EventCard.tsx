@@ -116,6 +116,12 @@ export function EventCard({
     const price = parseFloat(priceString);
     if (isNaN(price)) return "Free";
     if (price === 0) return "Free";
+    
+    // Check if this is a Web3 event with tier pricing
+    if (isWeb3Event && tierPrices) {
+      return "Multiple Tiers";
+    }
+    
     return `₹${price.toFixed(2)}`;
   };
 
@@ -227,7 +233,7 @@ export function EventCard({
               navigate(`/events/${id}`);
             }}
           >
-            {isWeb3Event ? 'View Web3 Event' : 'Buy Ticket'}
+            {isWeb3Event ? '🎫 Buy NFT Ticket' : 'Buy Ticket'}
           </Button>
         </div>
       </div>

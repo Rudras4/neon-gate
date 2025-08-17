@@ -185,10 +185,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
         throw new Error('Please connect your wallet first');
       }
 
-      // Generate metadata URI (in production, this would be uploaded to IPFS)
-      const metadataURI = `ipfs://Qm${Math.random().toString(36).substring(2)}`;
+      // ✅ FIX: Use buyTicket instead of mintTicket for purchasing
+      const metadataURI = `ipfs://event-${eventContractAddress}-tier-${tier}-${Date.now()}`;
       
-      const txHash = await web3Service.mintTicket(eventContractAddress, account, seatNumber, tier, metadataURI);
+      const txHash = await web3Service.buyTicket(eventContractAddress, tier, metadataURI, price);
       
       // Update balance after transaction
       await updateWalletInfo(account);
