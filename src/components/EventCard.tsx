@@ -21,6 +21,9 @@ interface EventCardProps {
   eventSource?: string;
   tierPrices?: string;
   tierQuantities?: string;
+  // Organizer information
+  organizerName?: string;
+  organizerId?: string;
   onInteraction?: (eventId: string, action: 'view' | 'click' | 'favorite') => void;
 }
 
@@ -42,6 +45,9 @@ export function EventCard({
   eventSource,
   tierPrices,
   tierQuantities,
+  // Organizer information
+  organizerName,
+  organizerId,
   onInteraction,
 }: EventCardProps) {
   const navigate = useNavigate();
@@ -176,6 +182,14 @@ export function EventCard({
               {attendees > 0 ? ' attending' : ' available'}
             </span>
           </div>
+          
+          {/* Organizer information */}
+          {organizerName && (
+            <div className="flex items-center space-x-2 text-blue-600 text-xs">
+              <span>👤</span>
+              <span>Organized by: {organizerName}</span>
+            </div>
+          )}
           
           {/* Web3-specific information */}
           {isWeb3Event && blockchainTxHash && (

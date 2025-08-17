@@ -1,39 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authAPI } from '@/lib/api';
 
-interface AuthResponse {
-  user: {
-    id: number;
-    email: string;
-    name: string;
-  };
-  token: string;
-  message: string;
-}
-
-interface ProfileResponse {
-  user: {
-    id: number;
-    email: string;
-    name: string;
-    createdAt: string;
-  };
-}
-
 interface User {
-  id: string;
-  email: string;
+  id: number;
   name: string;
+  email: string;
+  username?: string;
+  full_name?: string;
+  wallet_address?: string;
+  bio?: string;
+  avatar_url?: string;
+  is_verified: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string) => Promise<boolean>;
-  logout: () => void;
-  getProfile: () => Promise<any>;
   isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  updateProfile: (userData: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,103 +41,70 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check if user is already logged in on component mount
+  // Check if user is already logged in on app start
   useEffect(() => {
-    const checkAuth = async () => {
-      const savedUser = localStorage.getItem('user');
+    const checkAuthStatus = async () => {
       const token = localStorage.getItem('token');
-      
-      if (savedUser && token) {
+      if (token) {
         try {
-          // Validate token with backend
-          const data = await authAPI.getProfile() as ProfileResponse;
-          setUser({
-            id: data.user.id.toString(),
-            email: data.user.email,
-            name: data.user.name
-          });
+          const profile = await authAPI.getProfile();
+          setUser(profile.user);
         } catch (error) {
-          console.error('Token validation error:', error);
-          localStorage.removeItem('user');
+          console.error('Failed to get profile:', error);
           localStorage.removeItem('token');
         }
       }
       setIsLoading(false);
     };
 
-    checkAuth();
+    checkAuthStatus();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
+  const login = async (email: string, password: string) => {
     try {
-      const data = await authAPI.login(email, password) as AuthResponse;
-
-      const user: User = {
-        id: data.user.id.toString(),
-        email: data.user.email,
-        name: data.user.name
-      };
-
-      setUser(user);
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('token', data.token);
-      return true;
+      const response = await authAPI.login(email, password);
+      localStorage.setItem('token', response.token);
+      setUser(response.user);
     } catch (error) {
-      console.error('Login error:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signup = async (email: string, password: string, name: string): Promise<boolean> => {
-    setIsLoading(true);
-    try {
-      const data = await authAPI.register(name, email, password) as AuthResponse;
-
-      const user: User = {
-        id: data.user.id.toString(),
-        email: data.user.email,
-        name: data.user.name
-      };
-
-      setUser(user);
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('token', data.token);
-      return true;
-    } catch (error) {
-      console.error('Signup error:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
+      console.error('Login failed:', error);
+      throw error;
     }
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
     localStorage.removeItem('token');
+    setUser(null);
   };
 
-  const getProfile = async () => {
+  const register = async (name: string, email: string, password: string) => {
     try {
-      const data = await authAPI.getProfile() as ProfileResponse;
-      return data;
+      const response = await authAPI.register(name, email, password);
+      localStorage.setItem('token', response.token);
+      setUser(response.user);
     } catch (error) {
-      console.error('Error fetching profile:', error);
-      return null;
+      console.error('Registration failed:', error);
+      throw error;
+    }
+  };
+
+  const updateProfile = async (userData: Partial<User>) => {
+    try {
+      const response = await authAPI.updateProfile(userData);
+      setUser(response.user);
+    } catch (error) {
+      console.error('Profile update failed:', error);
+      throw error;
     }
   };
 
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
+    isLoading,
     login,
-    signup,
     logout,
-    getProfile,
-    isLoading
+    register,
+    updateProfile,
   };
 
   return (

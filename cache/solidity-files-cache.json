@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "D:\\Work_study\\working\\Hackathon\\neon-gate\\contracts\\EventFactory.sol": {
-      "lastModificationDate": 1755373771848,
-      "contentHash": "ba09894978ab34f945bb120a5544ef2e",
+      "lastModificationDate": 1755409002084,
+      "contentHash": "7cba309bc036f7a135aa1783814bd3c0",
       "sourceName": "contracts/EventFactory.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -50,8 +50,8 @@
       ]
     },
     "D:\\Work_study\\working\\Hackathon\\neon-gate\\contracts\\EventTicket.sol": {
-      "lastModificationDate": 1755372456052,
-      "contentHash": "8b1575b165f9688215e64941810c0062",
+      "lastModificationDate": 1755409023815,
+      "contentHash": "eb616b50664fc90701519c66d76d4d4b",
       "sourceName": "contracts/EventTicket.sol",
       "solcConfig": {
         "version": "0.8.20",

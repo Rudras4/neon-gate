@@ -77,6 +77,7 @@ export interface EventTicketInterface extends Interface {
     nameOrSignature:
       | "approve"
       | "balanceOf"
+      | "buyTicket"
       | "eventDate"
       | "eventDescription"
       | "eventName"
@@ -93,7 +94,6 @@ export interface EventTicketInterface extends Interface {
       | "isApprovedForAll"
       | "isSeatOccupied"
       | "maxOccupancy"
-      | "mintInitialTickets"
       | "mintTicket"
       | "name"
       | "owner"
@@ -122,6 +122,7 @@ export interface EventTicketInterface extends Interface {
       | "ApprovalForAll"
       | "OwnershipTransferred"
       | "TicketMinted"
+      | "TicketPurchased"
       | "TierAdded"
       | "Transfer"
   ): EventFragment;
@@ -133,6 +134,10 @@ export interface EventTicketInterface extends Interface {
   encodeFunctionData(
     functionFragment: "balanceOf",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "buyTicket",
+    values: [string, string]
   ): string;
   encodeFunctionData(functionFragment: "eventDate", values?: undefined): string;
   encodeFunctionData(
@@ -188,10 +193,6 @@ export interface EventTicketInterface extends Interface {
   encodeFunctionData(
     functionFragment: "maxOccupancy",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "mintInitialTickets",
-    values: [BigNumberish[], AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "mintTicket",
@@ -264,6 +265,7 @@ export interface EventTicketInterface extends Interface {
 
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "buyTicket", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "eventDate", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "eventDescription",
@@ -314,10 +316,6 @@ export interface EventTicketInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "maxOccupancy",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "mintInitialTickets",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "mintTicket", data: BytesLike): Result;
@@ -456,6 +454,34 @@ export namespace TicketMintedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace TicketPurchasedEvent {
+  export type InputTuple = [
+    buyer: AddressLike,
+    tokenId: BigNumberish,
+    tier: string,
+    price: BigNumberish,
+    seatNumber: BigNumberish
+  ];
+  export type OutputTuple = [
+    buyer: string,
+    tokenId: bigint,
+    tier: string,
+    price: bigint,
+    seatNumber: bigint
+  ];
+  export interface OutputObject {
+    buyer: string;
+    tokenId: bigint;
+    tier: string;
+    price: bigint;
+    seatNumber: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace TierAddedEvent {
   export type InputTuple = [
     tierName: string,
@@ -547,6 +573,12 @@ export interface EventTicket extends BaseContract {
 
   balanceOf: TypedContractMethod<[owner: AddressLike], [bigint], "view">;
 
+  buyTicket: TypedContractMethod<
+    [tierName: string, metadataURI: string],
+    [bigint],
+    "payable"
+  >;
+
   eventDate: TypedContractMethod<[], [bigint], "view">;
 
   eventDescription: TypedContractMethod<[], [string], "view">;
@@ -594,12 +626,6 @@ export interface EventTicket extends BaseContract {
   >;
 
   maxOccupancy: TypedContractMethod<[], [bigint], "view">;
-
-  mintInitialTickets: TypedContractMethod<
-    [tierQuantities: BigNumberish[], organizer: AddressLike],
-    [void],
-    "nonpayable"
-  >;
 
   mintTicket: TypedContractMethod<
     [
@@ -727,6 +753,13 @@ export interface EventTicket extends BaseContract {
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[owner: AddressLike], [bigint], "view">;
   getFunction(
+    nameOrSignature: "buyTicket"
+  ): TypedContractMethod<
+    [tierName: string, metadataURI: string],
+    [bigint],
+    "payable"
+  >;
+  getFunction(
     nameOrSignature: "eventDate"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
@@ -786,13 +819,6 @@ export interface EventTicket extends BaseContract {
   getFunction(
     nameOrSignature: "maxOccupancy"
   ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "mintInitialTickets"
-  ): TypedContractMethod<
-    [tierQuantities: BigNumberish[], organizer: AddressLike],
-    [void],
-    "nonpayable"
-  >;
   getFunction(
     nameOrSignature: "mintTicket"
   ): TypedContractMethod<
@@ -942,6 +968,13 @@ export interface EventTicket extends BaseContract {
     TicketMintedEvent.OutputObject
   >;
   getEvent(
+    key: "TicketPurchased"
+  ): TypedContractEvent<
+    TicketPurchasedEvent.InputTuple,
+    TicketPurchasedEvent.OutputTuple,
+    TicketPurchasedEvent.OutputObject
+  >;
+  getEvent(
     key: "TierAdded"
   ): TypedContractEvent<
     TierAddedEvent.InputTuple,
@@ -999,6 +1032,17 @@ export interface EventTicket extends BaseContract {
       TicketMintedEvent.InputTuple,
       TicketMintedEvent.OutputTuple,
       TicketMintedEvent.OutputObject
+    >;
+
+    "TicketPurchased(address,uint256,string,uint256,uint256)": TypedContractEvent<
+      TicketPurchasedEvent.InputTuple,
+      TicketPurchasedEvent.OutputTuple,
+      TicketPurchasedEvent.OutputObject
+    >;
+    TicketPurchased: TypedContractEvent<
+      TicketPurchasedEvent.InputTuple,
+      TicketPurchasedEvent.OutputTuple,
+      TicketPurchasedEvent.OutputObject
     >;
 
     "TierAdded(string,uint256,uint256)": TypedContractEvent<

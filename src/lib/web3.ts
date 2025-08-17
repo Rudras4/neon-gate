@@ -251,7 +251,7 @@ export class Web3Service {
     }
   }
 
-  async createEvent(eventConfig: any): Promise<{ txHash: string; gasUsed: string; totalCost: string }> {
+  async createEvent(eventConfig: any): Promise<{ txHash: string; gasUsed: string; totalCost: string; eventContractAddress: string }> {
     if (!this.signer) {
       if (!this.provider) {
         await this.initializeProvider();
@@ -296,6 +296,8 @@ export class Web3Service {
         }
         
         console.log('📝 Creating event with config:', eventConfig);
+        
+        // Call createEvent and get the returned contract address
         const tx = await contract.createEvent(eventConfig, { value: creationFee });
         console.log('📤 Transaction sent:', tx.hash);
         
@@ -320,11 +322,58 @@ export class Web3Service {
         
         console.log('🔗 Using transaction hash:', transactionHash);
         
+        // Get the event contract address from the transaction receipt
+        let eventContractAddress = '';
+        try {
+          // Parse the EventCreated event from the transaction receipt
+          const eventCreatedEvent = receipt.logs.find((log: any) => {
+            try {
+              const parsedLog = contract.interface.parseLog(log);
+              return parsedLog?.name === 'EventCreated';
+            } catch {
+              return false;
+            }
+          });
+          
+          if (eventCreatedEvent) {
+            const parsedLog = contract.interface.parseLog(eventCreatedEvent);
+            eventContractAddress = parsedLog.args[0]; // First argument is the event contract address
+            console.log('🎯 Event contract address from logs:', eventContractAddress);
+          } else {
+            console.log('⚠️ EventCreated event not found in logs, trying alternative method...');
+            
+            // Alternative: Get the latest event from the factory
+            const allEvents = await contract.getAllEvents();
+            if (allEvents.length > 0) {
+              eventContractAddress = allEvents[allEvents.length - 1];
+              console.log('🎯 Event contract address from getAllEvents:', eventContractAddress);
+            }
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Could not parse event contract address from logs:', parseError);
+          
+          // Fallback: Get the latest event from the factory
+          try {
+            const allEvents = await contract.getAllEvents();
+            if (allEvents.length > 0) {
+              eventContractAddress = allEvents[allEvents.length - 1];
+              console.log('🎯 Event contract address from getAllEvents (fallback):', eventContractAddress);
+            }
+          } catch (fallbackError) {
+            console.error('❌ Could not get event contract address:', fallbackError);
+          }
+        }
+        
+        if (!eventContractAddress) {
+          console.warn('⚠️ Could not determine event contract address');
+        }
+        
         // Track the transaction
         try {
           await transactionTracker.trackTransaction(transactionHash, 'EVENT_CREATION', {
             eventConfig,
-            creationFee: creationFee.toString()
+            creationFee: creationFee.toString(),
+            eventContractAddress
           });
           console.log('📊 Transaction tracked successfully');
         } catch (trackingError) {
@@ -340,11 +389,13 @@ export class Web3Service {
         
         console.log('⛽ Gas used:', gasUsed.toString());
         console.log('💸 Total cost:', ethers.formatEther(totalCost), 'ETH');
+        console.log('🎯 Event contract address:', eventContractAddress);
         
         return {
           txHash: transactionHash,
           gasUsed: gasUsed.toString(),
-          totalCost: totalCost.toString()
+          totalCost: totalCost.toString(),
+          eventContractAddress
         };
         
       } catch (error) {
@@ -886,6 +937,20 @@ export class Web3Service {
         seatNumber: tokenId.toString(),
         price: '0'
       };
+    }
+  }
+
+  // Fetch metadata from URI
+  private async fetchMetadata(uri: string): Promise<any> {
+    try {
+      const response = await fetch(uri);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch metadata from URI:', error);
+      return null;
     }
   }
 }

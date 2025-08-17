@@ -20,6 +20,14 @@ contract EventTicket is ERC721, Ownable {
         string metadataURI
     );
     
+    event TicketPurchased(
+        address indexed buyer,
+        uint256 indexed tokenId,
+        string tier,
+        uint256 price,
+        uint256 seatNumber
+    );
+    
     event TierAdded(
         string tierName,
         uint256 tierPrice,
@@ -72,6 +80,8 @@ contract EventTicket is ERC721, Ownable {
         _;
     }
     
+
+    
     modifier validSeatNumber(uint256 seatNumber) {
         require(seatNumber > 0 && seatNumber <= maxOccupancy, "Invalid seat number");
         require(!seatOccupied[seatNumber], "Seat already occupied");
@@ -84,12 +94,20 @@ contract EventTicket is ERC721, Ownable {
         _;
     }
     
+    modifier validPurchase(string memory tierName) {
+        require(tiers[tierName].exists, "Tier does not exist");
+        require(tiers[tierName].minted < tiers[tierName].quantity, "Tier sold out");
+        require(msg.value >= tiers[tierName].price, "Insufficient payment");
+        _;
+    }
+    
     constructor(
         string memory _eventName,
         string memory _eventDescription,
         uint256 _maxOccupancy,
         uint256[] memory _tierPrices,
         string[] memory _tierNames,
+        uint256[] memory _tierQuantities,
         uint256 _eventDate,
         address _eventOrganizer
     ) ERC721(_eventName, "EVENT") Ownable(_eventOrganizer) {
@@ -99,15 +117,18 @@ contract EventTicket is ERC721, Ownable {
         eventDate = _eventDate;
         eventOrganizer = _eventOrganizer;
         
-        // Initialize tiers
+        require(_tierNames.length == _tierQuantities.length, "Tier arrays length mismatch");
+        
+        // Initialize tiers with quantities
         for (uint256 i = 0; i < _tierNames.length; i++) {
             require(bytes(_tierNames[i]).length > 0, "Tier name cannot be empty");
             require(_tierPrices[i] > 0, "Tier price must be greater than 0");
+            require(_tierQuantities[i] > 0, "Tier quantity must be greater than 0");
             
             tiers[_tierNames[i]] = Tier({
                 name: _tierNames[i],
                 price: _tierPrices[i],
-                quantity: 0, // Will be set during initial minting
+                quantity: _tierQuantities[i], // Set quantity directly
                 minted: 0,
                 exists: true
             });
@@ -116,36 +137,76 @@ contract EventTicket is ERC721, Ownable {
         }
     }
     
+
+    
     /**
-     * @dev Mint initial tickets for the event organizer
-     * @param tierQuantities Array of quantities for each tier
-     * @param organizer Address of the event organizer
+     * @dev Buy a ticket directly from the event
+     * @param tierName Name of the tier to purchase
+     * @param metadataURI IPFS URI for ticket metadata
+     * @return tokenId The minted token ID
      */
-    function mintInitialTickets(
-        uint256[] memory tierQuantities,
-        address organizer
-    ) external onlyEventOrganizer {
-        require(tierQuantities.length == tierNames.length, "Tier quantities length mismatch");
-        require(organizer != address(0), "Invalid organizer address");
+    function buyTicket(
+        string memory tierName,
+        string memory metadataURI
+    ) external payable validPurchase(tierName) returns (uint256) {
+        // Find next available seat
+        uint256 seatNumber = _findNextAvailableSeat();
+        require(seatNumber > 0, "No available seats");
         
-        // Set the event organizer if not already set
-        if (eventOrganizer == address(0)) {
-            eventOrganizer = organizer;
-        }
+        _tokenIdCounter++;
+        uint256 tokenId = _tokenIdCounter;
         
-        for (uint256 i = 0; i < tierNames.length; i++) {
-            string memory tierName = tierNames[i];
-            uint256 quantity = tierQuantities[i];
-            
-            require(quantity > 0, "Tier quantity must be greater than 0");
-            tiers[tierName].quantity = quantity;
-            
-            emit TierAdded(tierName, tiers[tierName].price, quantity);
-        }
+        // Mark seat as occupied
+        seatOccupied[seatNumber] = true;
+        
+        // Create ticket
+        tickets[tokenId] = Ticket({
+            tokenId: tokenId,
+            seatNumber: seatNumber,
+            tier: tierName,
+            metadataURI: metadataURI,
+            owner: msg.sender,
+            exists: true
+        });
+        
+        // Update mappings
+        tokenIdToSeatNumber[tokenId] = seatNumber;
+        tokenIdToTier[tokenId] = tierName;
+        userTickets[msg.sender].push(tokenId);
+        
+        // Set token URI
+        _setTokenURI(tokenId, metadataURI);
+        
+        // Update tier minted count
+        tiers[tierName].minted++;
+        
+        // Mint NFT
+        _safeMint(msg.sender, tokenId);
+        
+        // Transfer payment to event organizer
+        payable(eventOrganizer).transfer(msg.value);
+        
+        emit TicketPurchased(msg.sender, tokenId, tierName, msg.value, seatNumber);
+        emit TicketMinted(tokenId, msg.sender, seatNumber, tierName, metadataURI);
+        
+        return tokenId;
     }
     
     /**
-     * @dev Mint a ticket for a specific seat and tier
+     * @dev Find the next available seat number
+     * @return seatNumber The next available seat number, or 0 if none available
+     */
+    function _findNextAvailableSeat() internal view returns (uint256) {
+        for (uint256 i = 1; i <= maxOccupancy; i++) {
+            if (!seatOccupied[i]) {
+                return i;
+            }
+        }
+        return 0;
+    }
+    
+    /**
+     * @dev Mint a ticket for a specific seat and tier (organizer only)
      * @param to Address to mint the ticket to
      * @param seatNumber Seat number (1-N)
      * @param tierName Name of the tier

@@ -44,21 +44,28 @@ const apiRequest = async <T>(
 // API functions for different endpoints
 export const authAPI = {
   login: async (email: string, password: string) => {
-    return apiRequest('/auth/login', {
+    return apiRequest<{ user: any; token: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
   },
 
   register: async (name: string, email: string, password: string) => {
-    return apiRequest('/auth/register', {
+    return apiRequest<{ user: any; token: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     });
   },
 
   getProfile: async () => {
-    return apiRequest('/auth/me');
+    return apiRequest<{ user: any }>('/auth/me');
+  },
+
+  updateProfile: async (userData: any) => {
+    return apiRequest<{ user: any }>('/users/profile', {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
   },
 };
 

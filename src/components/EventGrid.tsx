@@ -402,7 +402,10 @@ export function EventGrid({ searchQuery, filters, events, isLoading, error }: Ev
                 blockchainTxHash: event.blockchainTxHash || event.blockchain_tx_hash,
                 eventSource: event.eventSource || event.event_source,
                 tierPrices,
-                tierQuantities
+                tierQuantities,
+                // Organizer information
+                organizerName: event.organizer_name || event.organizerName,
+                organizerId: event.organizer_id || event.organizerId
               };
               
               return (

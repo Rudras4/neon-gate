@@ -186,6 +186,38 @@ const Organize = () => {
     }
   }, [isAuthenticated, authLoading, navigate, toast]);
 
+  // Sync activeTab with eventCreationType and ensure form data is properly set
+  useEffect(() => {
+    if (activeTab === 'web3' && formData.eventCreationType !== 'web3') {
+      setFormData(prev => ({ 
+        ...prev, 
+        eventCreationType: 'web3',
+        // Ensure Web3-specific fields have default values
+        tierPrices: prev.tierPrices.length > 0 ? prev.tierPrices : ['0'],
+        tierNames: prev.tierNames.length > 0 ? prev.tierNames : ['General'],
+        tierQuantities: prev.tierQuantities.length > 0 ? prev.tierQuantities : ['100'],
+        // Ensure required fields have values if they're empty
+        category: prev.category || 'technology',
+        eventType: prev.eventType || 'web3'
+      }));
+      console.log('🔄 Switched to Web3 tab, updated form data');
+    } else if (activeTab === 'traditional' && formData.eventCreationType !== 'traditional') {
+      setFormData(prev => ({ ...prev, eventCreationType: 'traditional' }));
+      console.log('🔄 Switched to Traditional tab, updated form data');
+    }
+  }, [activeTab, formData.eventCreationType]);
+
+  // Debug form data changes
+  useEffect(() => {
+    console.log('🔍 Form data updated:', {
+      activeTab,
+      eventCreationType: formData.eventCreationType,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      title: formData.title
+    });
+  }, [activeTab, formData.eventCreationType, formData.startDate, formData.endDate, formData.title]);
+
   // Show loading while checking authentication
   if (authLoading) {
     return (
@@ -257,6 +289,20 @@ const Organize = () => {
         account,
         balance
       });
+
+      // Debug form data before processing
+      console.log('📋 Form data before Web3 processing:', {
+        title: formData.title,
+        description: formData.description,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        category: formData.category,
+        eventType: formData.eventType,
+        capacity: formData.capacity,
+        price: formData.price,
+        activeTab,
+        eventCreationType: formData.eventCreationType
+      });
       
       // ✅ UNIFIED: Prepare event configuration for smart contract with proper validation
       const validTierPrices = formData.tierPrices.filter(price => price !== '' && !isNaN(parseFloat(price)));
@@ -277,6 +323,37 @@ const Organize = () => {
       // Ensure arrays have the same length
       const maxLength = Math.max(validTierPrices.length, validTierNames.length, validTierQuantities.length);
       
+      // Validate and prepare startDate for blockchain
+      let eventDate;
+      if (formData.startDate && formData.startDate.trim() !== '') {
+        const startDate = new Date(formData.startDate);
+        if (isNaN(startDate.getTime())) {
+          console.error('❌ Invalid start date format:', formData.startDate);
+          throw new Error('Invalid start date format. Please select a valid date.');
+        }
+        eventDate = Math.floor(startDate.getTime() / 1000); // Convert to Unix timestamp
+        console.log('✅ Start date validated:', {
+          original: formData.startDate,
+          parsed: startDate.toISOString(),
+          unix: eventDate
+        });
+      } else {
+        // Use current date as fallback
+        eventDate = Math.floor(Date.now() / 1000);
+        console.warn('⚠️ No start date provided, using current date as fallback');
+        console.log('🔄 Fallback date:', {
+          currentTime: new Date().toISOString(),
+          unix: eventDate
+        });
+      }
+
+      console.log('📅 Date debugging:', {
+        originalStartDate: formData.startDate,
+        parsedDate: new Date(formData.startDate),
+        isValid: !isNaN(new Date(formData.startDate).getTime()),
+        unixTimestamp: eventDate
+      });
+
       const eventConfig = {
         eventName: formData.title,
         eventDescription: formData.description,
@@ -286,7 +363,7 @@ const Organize = () => {
           return ethers.parseEther(priceValue.toString()); // Convert to wei using ethers
         }),
         tierNames: validTierNames.slice(0, maxLength),
-        eventDate: Math.floor(new Date(formData.startDate).getTime() / 1000), // Convert to Unix timestamp
+        eventDate: eventDate,
         tierQuantities: validTierQuantities.slice(0, maxLength).map(qty => parseInt(qty))
       };
       
@@ -305,36 +382,50 @@ const Organize = () => {
       console.log('🚀 Attempting to create Web3 event with config:', eventConfig);
       
       const result = await createWeb3Event(eventConfig);
-      console.log('📋 Web3 event creation result:', result);
+      console.log('🎯 Web3 event creation result:', result);
       
       if (result.success) {
+        console.log('✅ Web3 event created successfully on blockchain!');
+        console.log('🔗 Transaction Hash:', result.txHash);
+        console.log('🎯 Event Contract Address:', result.eventContractAddress);
+        console.log('⛽ Gas Used:', result.gasUsed);
+        console.log('💸 Total Cost:', result.totalCost);
+        
+        if (!result.eventContractAddress) {
+          console.warn('⚠️ WARNING: No event contract address returned from blockchain!');
+          console.warn('This may cause issues with ticket purchasing later.');
+        }
+        
         // ✅ UNIFIED: Create backend event after blockchain success with proper field mapping
         try {
-                  const backendEventData = {
-          title: formData.title,
-          description: formData.description,
-          longDescription: formData.longDescription || formData.description,
-          category: formData.category || 'technology',
-          eventType: formData.eventType || 'web3',
-          startDate: formData.startDate,
-          endDate: formData.endDate || formData.startDate,
-          venue: formData.venue || 'Blockchain Event',
-          venueAddress: formData.venueAddress || 'Blockchain',
-          venueCity: formData.venueCity || 'Blockchain',
-          venueState: formData.venueState || 'Blockchain',
-          venueCountry: formData.venueCountry || 'Blockchain',
-          venuePostalCode: formData.venuePostalCode || '',
-          capacity: formData.capacity ? parseInt(formData.capacity) : null,
-          price: formData.price ? parseFloat(formData.price) : (formData.tierPrices[0] ? parseFloat(formData.tierPrices[0]) : null),
-          imageUrl: formData.imageUrl || '',
-          imageGallery: formData.imageGallery || [],
-          spline3dUrl: formData.spline3dUrl || '',
-          blockchain_tx_hash: result.txHash || null,
-          event_source: 'web3',
-          tier_prices: JSON.stringify(formData.tierPrices.filter(price => price !== '')),
-          tier_quantities: JSON.stringify(formData.tierQuantities.filter(qty => qty !== '')),
-          status: 'published' // Web3 events are published immediately
-        };
+          console.log('🔄 Creating backend event record...');
+          
+          const backendEventData = {
+            title: formData.title,
+            description: formData.description,
+            longDescription: formData.longDescription || formData.description,
+            category: formData.category || 'technology',
+            eventType: formData.eventType || 'web3',
+            startDate: formData.startDate,
+            endDate: formData.endDate || formData.startDate,
+            venue: formData.venue || 'Blockchain Event',
+            venueAddress: formData.venueAddress || 'Blockchain',
+            venueCity: formData.venueCity || 'Blockchain',
+            venueState: formData.venueState || 'Blockchain',
+            venueCountry: formData.venueCountry || 'Blockchain',
+            venuePostalCode: formData.venuePostalCode || '',
+            capacity: formData.capacity ? parseInt(formData.capacity) : null,
+            price: formData.price ? parseFloat(formData.price) : (formData.tierPrices[0] ? parseFloat(formData.tierPrices[0]) : null),
+            imageUrl: formData.imageUrl || '',
+            imageGallery: formData.imageGallery || [],
+            spline3dUrl: formData.spline3dUrl || '',
+            blockchain_tx_hash: result.txHash || null,
+            event_contract_address: result.eventContractAddress || null,
+            event_source: 'web3',
+            tier_prices: JSON.stringify(formData.tierPrices.filter(price => price !== '')),
+            tier_quantities: JSON.stringify(formData.tierQuantities.filter(qty => qty !== '')),
+            status: 'published' // Web3 events are published immediately
+          };
 
           const createdEvent = await eventsAPI.create(backendEventData);
           console.log('✅ Backend event created successfully after blockchain success:', createdEvent);
@@ -550,31 +641,26 @@ const Organize = () => {
       const eventData = {
         title: formData.title,
         description: formData.description,
-        long_description: formData.longDescription || formData.description,
+        longDescription: formData.longDescription || formData.description,
         category: formData.category,
-        event_type: formData.eventType,
-        start_date: formData.startDate,
-        end_date: formData.endDate,
-        date: formData.startDate,
-        venue_name: formData.venue,
-        venue_address: formData.venueAddress,
-        venue_city: formData.venueCity,
-        venue_state: formData.venueState,
-        venue_country: formData.venueCountry,
-        venue_postal_code: formData.venuePostalCode,
-        latitude: null,
-        longitude: null,
-        location: `${formData.venue}, ${formData.venueCity}, ${formData.venueState}`,
+        eventType: formData.eventType,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        venue: formData.venue,
+        venueAddress: formData.venueAddress,
+        venueCity: formData.venueCity,
+        venueState: formData.venueState,
+        venueCountry: formData.venueCountry,
+        venuePostalCode: formData.venuePostalCode,
         capacity: formData.capacity ? parseInt(formData.capacity) : null,
         price: formData.price ? parseFloat(formData.price) : null,
-        image_url: formData.imageUrl || '',
-        image_gallery: formData.imageGallery.length > 0 ? formData.imageGallery : (formData.imageFile ? [formData.imageFile] : []),
-        spline3d_url: formData.spline3dUrl || '',
+        imageUrl: formData.imageUrl || '',
+        imageGallery: formData.imageGallery.length > 0 ? formData.imageGallery : (formData.imageFile ? [formData.imageFile] : []),
+        spline3dUrl: formData.spline3dUrl || '',
         blockchain_tx_hash: null,
         event_source: 'traditional',
         tier_prices: null,
-        tier_quantities: null,
-        status: 'draft'
+        tier_quantities: null
       };
 
       console.log('Event data being sent:', eventData);

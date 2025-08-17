@@ -15,6 +15,7 @@
     "test:network": "hardhat run scripts/test-network.ts",
     "test:localhost": "hardhat run scripts/test-localhost.ts --network localhost",
     "test:contract": "hardhat run scripts/test-contract-connection.ts --network localhost",
+    "test:nft-flow": "hardhat run scripts/test-nft-flow.ts --network localhost",
     "deploy:localhost": "hardhat run scripts/deploy.ts --network localhost",
     "deploy:fuji": "hardhat run scripts/deploy.ts --network fuji",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",

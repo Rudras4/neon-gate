@@ -254,6 +254,7 @@ const EventDetails = () => {
     // Web3-specific properties
     isWeb3Event: event.event_source === 'web3' || event.event_type === 'web3',
     blockchainTxHash: event.blockchain_tx_hash,
+    eventContractAddress: event.event_contract_address,
     eventSource: event.event_source,
     tierPrices: event.tier_prices,
     tierQuantities: event.tier_quantities
@@ -265,6 +266,16 @@ const EventDetails = () => {
     tickets: transformedEvent.tickets,
     venueImages: transformedEvent.venue.images,
     organizer: transformedEvent.organizer
+  });
+
+  // Debug Web3 event details
+  console.log('🔗 Web3 Event Details:', {
+    eventSource: event.event_source,
+    eventType: event.event_type,
+    isWeb3Event: transformedEvent.isWeb3Event,
+    blockchainTxHash: event.blockchain_tx_hash,
+    eventContractAddress: event.event_contract_address,
+    hasContractAddress: !!event.event_contract_address
   });
 
   return (
@@ -299,6 +310,7 @@ const EventDetails = () => {
                      eventId={transformedEvent.id}
                      isWeb3Event={transformedEvent.isWeb3Event}
                      blockchainTxHash={transformedEvent.blockchainTxHash}
+                     eventContractAddress={transformedEvent.eventContractAddress}
                    />
                  </div>
                 <EventInfo event={transformedEvent} />

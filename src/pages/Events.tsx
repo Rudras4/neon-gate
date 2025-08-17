@@ -237,7 +237,7 @@ const Events = () => {
       
       console.log('🚀 Fetching events from backend API...');
       
-      // Get all published events
+      // Get all published events (this should include events from ALL users)
       const response = await eventsAPI.getAll() as { events: any[] };
       
       console.log('📡 Backend API response:', response);
@@ -246,16 +246,24 @@ const Events = () => {
         // Enhanced logging for Web3 event detection
         console.log('🔍 Raw backend events:', response.events);
         
+        // Verify that we're getting events from different users
+        const eventOrganizers = [...new Set(response.events.map(e => e.organizer_id))];
+        console.log('👥 Events from different organizers:', eventOrganizers);
+        console.log('📊 Total events found:', response.events.length);
+        
         // Log Web3-specific fields for debugging
         response.events.forEach((event, index) => {
-          console.log(`🔍 Event ${index + 1} Web3 fields:`, {
+          console.log(`🔍 Event ${index + 1} details:`, {
             id: event.id,
             title: event.title,
+            organizer_id: event.organizer_id,
+            organizer_name: event.organizer_name,
             event_source: event.event_source,
             event_type: event.event_type,
             blockchain_tx_hash: event.blockchain_tx_hash,
             tier_prices: event.tier_prices,
             tier_quantities: event.tier_quantities,
+            status: event.status,
             hasWeb3Fields: !!(event.event_source === 'web3' || event.event_type === 'web3' || event.blockchain_tx_hash)
           });
         });
@@ -278,44 +286,38 @@ const Events = () => {
         const web3Events = transformedEvents.filter(e => e.isWeb3Event);
         const traditionalEvents = transformedEvents.filter(e => !e.isWeb3Event);
         
-        const stats = {
+        console.log('📊 Event breakdown:', {
+          total: transformedEvents.length,
+          web3: web3Events.length,
+          traditional: traditionalEvents.length,
+          web3Percentage: ((web3Events.length / transformedEvents.length) * 100).toFixed(1) + '%'
+        });
+        
+        setEvents(transformedEvents);
+        setWeb3EventStats({
           total: transformedEvents.length,
           web3: web3Events.length,
           traditional: traditionalEvents.length
-        };
+        });
         
-        console.log('📊 Web3 Event Statistics:', stats);
+        // Log success with detailed information
+        console.log('✅ Successfully loaded events:', {
+          totalEvents: transformedEvents.length,
+          web3Events: web3Events.length,
+          traditionalEvents: traditionalEvents.length,
+          eventsFromDifferentUsers: eventOrganizers.length
+        });
         
-        // Log details about Web3 events found
-        if (web3Events.length > 0) {
-          console.log('🎉 Web3 Events Found:', web3Events.map(e => ({
-            id: e.id,
-            title: e.title,
-            blockchainTxHash: e.blockchainTxHash,
-            tierPrices: e.tierPrices,
-            tierQuantities: e.tierQuantities
-          })));
-        } else {
-          console.log('⚠️ No Web3 events found in the response');
-        }
-        
-        setWeb3EventStats(stats);
-        setEvents(transformedEvents);
       } else {
-        // Handle case where response doesn't have events array
-        console.warn('No events array in response:', response);
+        console.warn('⚠️ No events found in API response');
         setEvents([]);
+        setWeb3EventStats({ total: 0, web3: 0, traditional: 0 });
       }
-      
-    } catch (err) {
-      console.error('❌ Error fetching events:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch events';
-      setError(errorMessage);
-      toast({
-        title: "Error",
-        description: "Failed to load events. Please try again.",
-        variant: "destructive",
-      });
+    } catch (error) {
+      console.error('❌ Error fetching events:', error);
+      setError('Failed to fetch events. Please try again.');
+      setEvents([]);
+      setWeb3EventStats({ total: 0, web3: 0, traditional: 0 });
     } finally {
       setIsLoading(false);
     }
@@ -411,6 +413,16 @@ const Events = () => {
             {/* Web3 Event Statistics */}
             {web3EventStats.total > 0 && (
               <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200 max-w-2xl mx-auto">
+                {/* Public Events Notice */}
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-center space-x-2 text-green-700">
+                    <span className="text-lg">🌍</span>
+                    <span className="text-sm font-medium">
+                      All events are publicly visible! Browse and purchase tickets from any user's events.
+                    </span>
+                  </div>
+                </div>
+                
                 <div className="flex justify-center items-center space-x-8 text-sm">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-gray-900">{web3EventStats.total}</div>
@@ -425,6 +437,17 @@ const Events = () => {
                     <div className="text-blue-600">Traditional Events</div>
                   </div>
                 </div>
+                
+                {/* Event Organizers Info */}
+                {events.length > 0 && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-sm text-blue-700">
+                        <span className="font-medium">Event Organizers:</span> Events from {new Set(events.map(e => e.organizerName || e.organizer_name)).size} different users
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             

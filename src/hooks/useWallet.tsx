@@ -15,7 +15,7 @@ interface WalletContextType {
   purchaseTicket: (eventContractAddress: string, tier: string, seatNumber: number, price: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
   listTicketForResale: (eventContractAddress: string, tokenId: number, price: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
   buyResaleTicket: (listingId: number, price: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
-  createEvent: (eventConfig: any) => Promise<{ success: boolean; txHash?: string; error?: string }>;
+  createEvent: (eventConfig: any) => Promise<{ success: boolean; txHash?: string; error?: string; eventContractAddress?: string; gasUsed?: string; totalCost?: string }>;
   isPurchasing: boolean;
   isListing: boolean;
   isCreatingEvent: boolean;
@@ -266,14 +266,16 @@ export function WalletProvider({ children }: WalletProviderProps) {
       console.log('Event created successfully!', {
         txHash: result.txHash,
         gasUsed: result.gasUsed,
-        totalCost: result.totalCost
+        totalCost: result.totalCost,
+        eventContractAddress: result.eventContractAddress
       });
       
       return { 
         success: true, 
         txHash: result.txHash,
         gasUsed: result.gasUsed,
-        totalCost: result.totalCost
+        totalCost: result.totalCost,
+        eventContractAddress: result.eventContractAddress
       };
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to create event';

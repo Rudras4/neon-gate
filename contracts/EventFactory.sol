@@ -82,6 +82,7 @@ contract EventFactory is Ownable, ReentrancyGuard, Pausable {
             config.maxOccupancy,
             config.tierPrices,
             config.tierNames,
+            config.tierQuantities,
             config.eventDate,
             msg.sender // organizer
         ));
