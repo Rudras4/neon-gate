@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/useWallet';
 import { ethers } from 'ethers';
+import { EVENT_TICKET_ABI } from '@/lib/web3';
 
 interface NFTTicketPurchaseProps {
   eventContractAddress: string;
@@ -108,13 +109,8 @@ export const NFTTicketPurchase: React.FC<NFTTicketPurchaseProps> = ({
     );
   }
 
-  // EventTicket contract ABI for essential functions
-  const eventTicketABI = [
-    "function buyTicket(string memory tierName, string memory metadataURI) external payable returns (uint256)",
-    "function getTier(string memory tierName) external view returns (tuple(string name, uint256 price, uint256 quantity, uint256 minted, bool exists))",
-    "function getAvailableSeats() external view returns (uint256)",
-    "function getTotalMinted() external view returns (uint256)"
-  ];
+  // Use centralized ABI from web3.ts
+  const eventTicketABI = EVENT_TICKET_ABI;
 
   useEffect(() => {
     if (isWeb3Event && eventContractAddress && isConnected && !isPlaceholderContract) {

@@ -14,7 +14,7 @@ const Signup = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const { signup, isLoading } = useAuth();
+  const { register, isLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -48,15 +48,14 @@ const Signup = () => {
       return;
     }
 
-    const success = await signup(email, password, name);
-    
-    if (success) {
+    try {
+      await register(name, email, password);
       toast({
         title: "Success",
         description: "Account created successfully! Welcome to TicketChain.",
       });
       navigate('/');
-    } else {
+    } catch (error) {
       toast({
         title: "Signup Failed",
         description: "Something went wrong. Please try again.",
