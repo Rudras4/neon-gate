@@ -11,10 +11,16 @@ interface EventCardProps {
   location: string;
   price: string;
   image: string;
-  tier: "Platinum" | "Gold" | "Silver" | "Bronze";
+  tier: "Platinum" | "Gold" | "Silver" | "Bronze" | "Web3";
   attendees: number;
   maxAttendees: number;
   isPopular?: boolean;
+  // Web3-specific properties
+  isWeb3Event?: boolean;
+  blockchainTxHash?: string;
+  eventSource?: string;
+  tierPrices?: string;
+  tierQuantities?: string;
   onInteraction?: (eventId: string, action: 'view' | 'click' | 'favorite') => void;
 }
 
@@ -30,6 +36,12 @@ export function EventCard({
   attendees,
   maxAttendees,
   isPopular = false,
+  // Web3-specific properties
+  isWeb3Event = false,
+  blockchainTxHash,
+  eventSource,
+  tierPrices,
+  tierQuantities,
   onInteraction,
 }: EventCardProps) {
   const navigate = useNavigate();
@@ -69,21 +81,53 @@ export function EventCard({
     
     navigate(`/events/${id}`);
   };
+
   const tierColors = {
     Platinum: "bg-gradient-to-r from-slate-400 to-slate-600",
     Gold: "bg-gradient-to-r from-yellow-400 to-yellow-600",
     Silver: "bg-gradient-to-r from-gray-300 to-gray-500",
     Bronze: "bg-gradient-to-r from-orange-400 to-orange-600",
+    Web3: "bg-gradient-to-r from-purple-500 to-blue-600",
   };
+
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Format price for display
+  const formatPrice = (priceString: string) => {
+    const price = parseFloat(priceString);
+    if (isNaN(price)) return "Free";
+    if (price === 0) return "Free";
+    return `₹${price.toFixed(2)}`;
+  };
+
+  // Handle missing image with fallback
+  const imageSrc = image || "/src/assets/hero-corporate.jpg";
 
   return (
     <div ref={cardRef} className="card-elevated group cursor-pointer" onClick={handleCardClick}>
       {/* Image */}
       <div className="relative overflow-hidden rounded-t-xl">
         <img
-          src={image}
+          src={imageSrc}
           alt={title}
           className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+          onError={(e) => {
+            // Fallback to placeholder image if main image fails to load
+            (e.target as HTMLImageElement).src = "/src/assets/hero-corporate.jpg";
+          }}
         />
         {isPopular && (
           <div className="absolute top-3 left-3 bg-primary/90 backdrop-blur-sm text-primary-foreground px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
@@ -91,6 +135,15 @@ export function EventCard({
             <span>Popular</span>
           </div>
         )}
+        
+        {/* Web3 Event Indicator */}
+        {isWeb3Event && (
+          <div className="absolute top-3 left-3 bg-gradient-to-r from-purple-500 to-blue-600 backdrop-blur-sm text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
+            <span>⛓️</span>
+            <span>Web3</span>
+          </div>
+        )}
+        
         <div className={`absolute top-3 right-3 ${tierColors[tier]} text-white px-2 py-1 rounded-full text-xs font-medium`}>
           {tier}
         </div>
@@ -110,25 +163,45 @@ export function EventCard({
         <div className="space-y-2 text-sm">
           <div className="flex items-center space-x-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
-            <span>{date}</span>
+            <span>{formatDate(date)}</span>
           </div>
           <div className="flex items-center space-x-2 text-muted-foreground">
             <MapPin className="h-4 w-4" />
-            <span>{location}</span>
+            <span>{location || "Location TBD"}</span>
           </div>
           <div className="flex items-center space-x-2 text-muted-foreground">
             <Users className="h-4 w-4" />
-            <span>{attendees > 0 ? `${attendees}/${maxAttendees}` : `${maxAttendees} capacity`} {attendees > 0 ? 'attending' : 'available'}</span>
+            <span>
+              {attendees > 0 ? `${attendees}/${maxAttendees}` : `${maxAttendees} capacity`} 
+              {attendees > 0 ? ' attending' : ' available'}
+            </span>
           </div>
+          
+          {/* Web3-specific information */}
+          {isWeb3Event && blockchainTxHash && (
+            <div className="flex items-center space-x-2 text-purple-600 text-xs">
+              <span>🔗</span>
+              <span className="font-mono">
+                {blockchainTxHash.substring(0, 6)}...{blockchainTxHash.substring(blockchainTxHash.length - 4)}
+              </span>
+            </div>
+          )}
+          
+          {isWeb3Event && tierPrices && (
+            <div className="flex items-center space-x-2 text-blue-600 text-xs">
+              <span>💰</span>
+              <span>Multiple pricing tiers available</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t">
           <div>
-            <span className="text-2xl font-bold text-primary">{price}</span>
-            <span className="text-muted-foreground text-sm ml-1">₹</span>
+            <span className="text-2xl font-bold text-primary">{formatPrice(price)}</span>
+            {price !== "Free" && <span className="text-muted-foreground text-sm ml-1">₹</span>}
           </div>
           <Button 
-            className="btn-hero"
+            className={`btn-hero ${isWeb3Event ? 'bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               
@@ -140,7 +213,7 @@ export function EventCard({
               navigate(`/events/${id}`);
             }}
           >
-            Buy Ticket
+            {isWeb3Event ? 'View Web3 Event' : 'Buy Ticket'}
           </Button>
         </div>
       </div>

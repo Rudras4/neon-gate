@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Filter, CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useEffect } from "react";
-import { categoriesAPI, locationsAPI, searchAPI } from "@/lib/api";
+import { categoriesAPI, locationsAPI, searchAPI } from '@/lib/api';
 
 interface EventFiltersProps {
   filters: any;
@@ -34,27 +34,41 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
   const [filterPresets, setFilterPresets] = useState<any[]>([]);
+  const [apiErrors, setApiErrors] = useState<{[key: string]: boolean}>({});
 
-  // Fetch categories from backend
+  // Fetch categories from backend with fallback
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setIsLoadingCategories(true);
+        setApiErrors(prev => ({ ...prev, categories: false }));
+        
         const response = await categoriesAPI.getAll() as any;
-        if (response && response.success && response.categories) {
-          setCategories(response.categories.map((cat: any) => cat.name));
-        } else {
-          // If backend fails, try to fetch popular categories
-          const popularResponse = await categoriesAPI.getPopular() as any;
-          if (popularResponse && popularResponse.success && popularResponse.categories) {
-            setCategories(popularResponse.categories.map((cat: any) => cat.name));
-          } else {
-            // Only use fallback if both API calls fail
-            console.warn('Both category APIs failed, using fallback data');
+        if (response && response.success && response.categories && Array.isArray(response.categories)) {
+          const categoryNames = response.categories.map((cat: any) => cat.name || cat.title || cat);
+          if (categoryNames.length > 0) {
+            setCategories(categoryNames);
+            return;
           }
         }
+        
+        // If primary API fails, try popular categories
+        const popularResponse = await categoriesAPI.getPopular() as any;
+        if (popularResponse && popularResponse.success && popularResponse.categories && Array.isArray(popularResponse.categories)) {
+          const categoryNames = popularResponse.categories.map((cat: any) => cat.name || cat.title || cat);
+          if (categoryNames.length > 0) {
+            setCategories(categoryNames);
+            return;
+          }
+        }
+        
+        // Use fallback if both APIs fail
+        console.warn('Both category APIs failed, using fallback data');
+        setApiErrors(prev => ({ ...prev, categories: true }));
+        
       } catch (error) {
         console.error('Error fetching categories:', error);
+        setApiErrors(prev => ({ ...prev, categories: true }));
         // Keep fallback categories on error
       } finally {
         setIsLoadingCategories(false);
@@ -64,26 +78,39 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
     fetchCategories();
   }, []);
 
-  // Fetch locations from backend
+  // Fetch locations from backend with fallback
   useEffect(() => {
     const fetchLocations = async () => {
       try {
         setIsLoadingLocations(true);
+        setApiErrors(prev => ({ ...prev, locations: false }));
+        
         const response = await locationsAPI.getAll() as any;
-        if (response && response.success && response.locations) {
-          setLocations(response.locations.map((loc: any) => loc.name));
-        } else {
-          // If backend fails, try to fetch popular locations
-          const popularResponse = await locationsAPI.getPopular() as any;
-          if (popularResponse && response.success && popularResponse.locations) {
-            setLocations(popularResponse.locations.map((loc: any) => loc.name));
-          } else {
-            // Only use fallback if both API calls fail
-            console.warn('Both location APIs failed, using fallback data');
+        if (response && response.success && response.locations && Array.isArray(response.locations)) {
+          const locationNames = response.locations.map((loc: any) => loc.name || loc.city || loc);
+          if (locationNames.length > 0) {
+            setLocations(locationNames);
+            return;
           }
         }
+        
+        // If primary API fails, try popular locations
+        const popularResponse = await locationsAPI.getPopular() as any;
+        if (popularResponse && popularResponse.success && popularResponse.locations && Array.isArray(popularResponse.locations)) {
+          const locationNames = popularResponse.locations.map((loc: any) => loc.name || loc.city || loc);
+          if (locationNames.length > 0) {
+            setLocations(locationNames);
+            return;
+          }
+        }
+        
+        // Use fallback if both APIs fail
+        console.warn('Both location APIs failed, using fallback data');
+        setApiErrors(prev => ({ ...prev, locations: true }));
+        
       } catch (error) {
         console.error('Error fetching locations:', error);
+        setApiErrors(prev => ({ ...prev, locations: true }));
         // Keep fallback locations on error
       } finally {
         setIsLoadingLocations(false);
@@ -93,17 +120,25 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
     fetchLocations();
   }, []);
 
-  // Fetch filter presets from backend
+  // Fetch filter presets from backend with fallback
   useEffect(() => {
     const fetchFilterPresets = async () => {
       try {
         setIsLoadingFilters(true);
+        setApiErrors(prev => ({ ...prev, presets: false }));
+        
         const response = await searchAPI.getFilterPresets() as any;
-        if (response && response.success) {
-          setFilterPresets(response.presets || []);
+        if (response && response.success && response.presets && Array.isArray(response.presets)) {
+          setFilterPresets(response.presets);
+        } else {
+          // Use empty array if API fails
+          setFilterPresets([]);
+          setApiErrors(prev => ({ ...prev, presets: true }));
         }
       } catch (error) {
         console.error('Error fetching filter presets:', error);
+        setFilterPresets([]);
+        setApiErrors(prev => ({ ...prev, presets: true }));
       } finally {
         setIsLoadingFilters(false);
       }
@@ -132,15 +167,22 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
   const applyAdvancedFilters = async (advancedFilters: any) => {
     try {
       setIsLoadingFilters(true);
+      setApiErrors(prev => ({ ...prev, advanced: false }));
+      
       const response = await searchAPI.applyAdvancedFilters(advancedFilters) as any;
       if (response && response.success) {
         // Update filters with backend-validated data
         onFiltersChange(response.filters || advancedFilters);
+      } else {
+        // Fallback to local filter update
+        onFiltersChange(advancedFilters);
+        setApiErrors(prev => ({ ...prev, advanced: true }));
       }
     } catch (error) {
       console.error('Error applying advanced filters:', error);
       // Fallback to local filter update
       onFiltersChange(advancedFilters);
+      setApiErrors(prev => ({ ...prev, advanced: true }));
     } finally {
       setIsLoadingFilters(false);
     }
@@ -161,26 +203,33 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
         />
       </div>
 
-             {/* Quick Category Chips */}
-       <div className="flex flex-wrap gap-2">
-         {isLoadingCategories ? (
-           <div className="flex items-center gap-2">
-             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-             <span className="text-sm text-muted-foreground">Loading categories...</span>
-           </div>
-         ) : (
-           quickCategories.map((category) => (
-             <Badge
-               key={category}
-               variant={filters.category === category ? "default" : "outline"}
-               className="cursor-pointer hover:scale-105 transition-transform px-3 py-1 text-xs"
-               onClick={() => updateFilter("category", filters.category === category ? "" : category)}
-             >
-               {category}
-             </Badge>
-           ))
-         )}
-       </div>
+      {/* Quick Category Chips */}
+      <div className="flex flex-wrap gap-2">
+        {isLoadingCategories ? (
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm text-muted-foreground">Loading categories...</span>
+          </div>
+        ) : (
+          <>
+            {quickCategories.map((category) => (
+              <Badge
+                key={category}
+                variant={filters.category === category ? "default" : "outline"}
+                className="cursor-pointer hover:scale-105 transition-transform px-3 py-1 text-xs"
+                onClick={() => updateFilter("category", filters.category === category ? "" : category)}
+              >
+                {category}
+              </Badge>
+            ))}
+            {apiErrors.categories && (
+              <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                Using fallback data
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Filter Toggle Button (Mobile) */}
       <div className="lg:hidden">
@@ -214,23 +263,30 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
                 </Button>
               )}
             </div>
-                         <Select value={filters.location} onValueChange={(value) => updateFilter("location", value)}>
-               <SelectTrigger>
-                 <SelectValue placeholder={isLoadingLocations ? "Loading locations..." : "Select location"} />
-               </SelectTrigger>
-               <SelectContent>
-                 {isLoadingLocations ? (
-                   <div className="flex items-center justify-center py-2">
-                     <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
-                     <span className="text-sm text-muted-foreground">Loading locations...</span>
-                   </div>
-                 ) : (
-                   locations.map((location) => (
-                     <SelectItem key={location} value={location}>{location}</SelectItem>
-                   ))
-                 )}
-               </SelectContent>
-             </Select>
+            <Select value={filters.location} onValueChange={(value) => updateFilter("location", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder={isLoadingLocations ? "Loading locations..." : "Select location"} />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingLocations ? (
+                  <div className="flex items-center justify-center py-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
+                    <span className="text-sm text-muted-foreground">Loading locations...</span>
+                  </div>
+                ) : (
+                  <>
+                    {locations.map((location) => (
+                      <SelectItem key={location} value={location}>{location}</SelectItem>
+                    ))}
+                    {apiErrors.locations && (
+                      <div className="px-2 py-1 text-xs text-amber-600 bg-amber-50">
+                        Using fallback data
+                      </div>
+                    )}
+                  </>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Category */}
@@ -251,6 +307,11 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
                 {categories.map((category) => (
                   <SelectItem key={category} value={category}>{category}</SelectItem>
                 ))}
+                {apiErrors.categories && (
+                  <div className="px-2 py-1 text-xs text-amber-600 bg-amber-50">
+                    Using fallback data
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -302,9 +363,9 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
           {/* Price Range */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Price Range (AVAX)</label>
+              <label className="text-sm font-medium">Price Range (₹)</label>
               <span className="text-sm text-muted-foreground">
-                {filters.priceRange[0]} - {filters.priceRange[1]}
+                ₹{filters.priceRange[0]} - ₹{filters.priceRange[1]}
               </span>
             </div>
             <Slider
@@ -362,7 +423,7 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
                   mode="range"
                   defaultMonth={dateRange.from}
                   selected={dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined}
-                                     onSelect={(range) => updateDateRange(range || {})}
+                  onSelect={(range) => updateDateRange(range || {})}
                   numberOfMonths={2}
                   className="pointer-events-auto"
                 />
@@ -390,6 +451,20 @@ export function EventFilters({ filters, onFiltersChange, searchQuery, onSearchCh
         >
           Clear All Filters
         </Button>
+
+        {/* API Status Indicators */}
+        {(apiErrors.categories || apiErrors.locations || apiErrors.presets) && (
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="text-sm text-amber-800">
+              <div className="font-medium mb-1">API Status:</div>
+              <div className="space-y-1 text-xs">
+                {apiErrors.categories && <div>• Categories: Using fallback data</div>}
+                {apiErrors.locations && <div>• Locations: Using fallback data</div>}
+                {apiErrors.presets && <div>• Filter presets: Unavailable</div>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

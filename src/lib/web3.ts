@@ -265,79 +265,116 @@ export class Web3Service {
     console.log('🌐 Current network:', this.currentNetwork);
     console.log('📋 Contract address:', CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY);
 
-    const contract = new ethers.Contract(
-      CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES].EVENT_FACTORY,
-      EVENT_FACTORY_ABI,
-      this.signer
-    );
+    // ✅ IMPROVED: Add retry logic with exponential backoff for circuit breaker errors
+    const maxRetries = 3;
+    let lastError: any = null;
 
-    // Get creation fee
-    let creationFee;
-    try {
-      console.log('💰 Trying getEventCreationFee()...');
-      creationFee = await contract.getEventCreationFee();
-      console.log('✅ getEventCreationFee() successful:', ethers.formatEther(creationFee), 'ETH');
-    } catch (error) {
-      console.log('⚠️ getEventCreationFee() failed, using fallback value...');
-      console.log('❌ Error details:', error.message);
-      
-      // Fallback to hardcoded value (0.01 ETH = 10000000000000000 wei)
-      creationFee = ethers.parseEther('0.01');
-      console.log('🔄 Using fallback creation fee:', ethers.formatEther(creationFee), 'ETH');
-      console.log('💡 This is the known contract value from EventFactory.sol');
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Attempt ${attempt}/${maxRetries} to create event...`);
+        
+        const contract = new ethers.Contract(
+          CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES].EVENT_FACTORY,
+          EVENT_FACTORY_ABI,
+          this.signer
+        );
+
+        // Get creation fee
+        let creationFee;
+        try {
+          console.log('💰 Trying getEventCreationFee()...');
+          creationFee = await contract.getEventCreationFee();
+          console.log('✅ getEventCreationFee() successful:', ethers.formatEther(creationFee), 'ETH');
+        } catch (error) {
+          console.log('⚠️ getEventCreationFee() failed, using fallback value...');
+          console.log('❌ Error details:', error.message);
+          
+          // Fallback to hardcoded value (0.01 ETH = 10000000000000000 wei)
+          creationFee = ethers.parseEther('0.01');
+          console.log('🔄 Using fallback creation fee:', ethers.formatEther(creationFee), 'ETH');
+          console.log('💡 This is the known contract value from EventFactory.sol');
+        }
+        
+        console.log('📝 Creating event with config:', eventConfig);
+        const tx = await contract.createEvent(eventConfig, { value: creationFee });
+        console.log('📤 Transaction sent:', tx.hash);
+        
+        const receipt = await tx.wait();
+        console.log('✅ Transaction confirmed');
+        console.log('📋 Receipt details:', {
+          hash: receipt.hash,
+          transactionHash: receipt.transactionHash,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed?.toString()
+        });
+        
+        // Get transaction hash from multiple possible sources
+        const transactionHash = receipt.hash || receipt.transactionHash || tx.hash;
+        
+        if (!transactionHash) {
+          console.error('❌ No transaction hash found in receipt or transaction');
+          console.error('Receipt keys:', Object.keys(receipt));
+          console.error('Transaction keys:', Object.keys(tx));
+          throw new Error('Transaction confirmed but no transaction hash could be retrieved');
+        }
+        
+        console.log('🔗 Using transaction hash:', transactionHash);
+        
+        // Track the transaction
+        try {
+          await transactionTracker.trackTransaction(transactionHash, 'EVENT_CREATION', {
+            eventConfig,
+            creationFee: creationFee.toString()
+          });
+          console.log('📊 Transaction tracked successfully');
+        } catch (trackingError) {
+          console.warn('⚠️ Transaction tracking failed, but event creation was successful:', trackingError.message);
+          // Don't fail the entire operation if tracking fails
+        }
+        
+        // Calculate gas cost
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice || 0n;
+        const gasCost = gasUsed * gasPrice;
+        const totalCost = creationFee + gasCost;
+        
+        console.log('⛽ Gas used:', gasUsed.toString());
+        console.log('💸 Total cost:', ethers.formatEther(totalCost), 'ETH');
+        
+        return {
+          txHash: transactionHash,
+          gasUsed: gasUsed.toString(),
+          totalCost: totalCost.toString()
+        };
+        
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ Attempt ${attempt} failed:`, error.message);
+        
+        // Check if this is a circuit breaker error
+        if (error.message.includes('circuit breaker') || 
+            error.message.includes('Execution prevented') ||
+            error.code === -32603) {
+          console.log('🚫 Circuit breaker error detected');
+          
+          if (attempt < maxRetries) {
+            // Exponential backoff: wait 2^attempt seconds
+            const delay = Math.pow(2, attempt) * 1000;
+            console.log(`⏳ Waiting ${delay}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            throw new Error(`Circuit breaker error after ${maxRetries} attempts. Please wait a few minutes and try again.`);
+          }
+        }
+        
+        // For other errors, don't retry
+        throw error;
+      }
     }
     
-    console.log('📝 Creating event with config:', eventConfig);
-    const tx = await contract.createEvent(eventConfig, { value: creationFee });
-    console.log('📤 Transaction sent:', tx.hash);
-    
-    const receipt = await tx.wait();
-    console.log('✅ Transaction confirmed');
-    console.log('📋 Receipt details:', {
-      hash: receipt.hash,
-      transactionHash: receipt.transactionHash,
-      blockNumber: receipt.blockNumber,
-      gasUsed: receipt.gasUsed?.toString()
-    });
-    
-    // Get transaction hash from multiple possible sources
-    const transactionHash = receipt.hash || receipt.transactionHash || tx.hash;
-    
-    if (!transactionHash) {
-      console.error('❌ No transaction hash found in receipt or transaction');
-      console.error('Receipt keys:', Object.keys(receipt));
-      console.error('Transaction keys:', Object.keys(tx));
-      throw new Error('Transaction confirmed but no transaction hash could be retrieved');
-    }
-    
-    console.log('🔗 Using transaction hash:', transactionHash);
-    
-    // Track the transaction
-    try {
-      await transactionTracker.trackTransaction(transactionHash, 'EVENT_CREATION', {
-        eventConfig,
-        creationFee: creationFee.toString()
-      });
-      console.log('📊 Transaction tracked successfully');
-    } catch (trackingError) {
-      console.warn('⚠️ Transaction tracking failed, but event creation was successful:', trackingError.message);
-      // Don't fail the entire operation if tracking fails
-    }
-    
-    // Calculate gas cost
-    const gasUsed = receipt.gasUsed;
-    const gasPrice = receipt.gasPrice || 0n;
-    const gasCost = gasUsed * gasPrice;
-    const totalCost = creationFee + gasCost;
-    
-    console.log('⛽ Gas used:', gasUsed.toString());
-    console.log('💸 Total cost:', ethers.formatEther(totalCost), 'ETH');
-    
-    return {
-      txHash: transactionHash,
-      gasUsed: gasUsed.toString(),
-      totalCost: totalCost.toString()
-    };
+    // This should never be reached, but just in case
+    throw lastError || new Error('Event creation failed after all retry attempts');
   }
 
   async mintTicket(eventContractAddress: string, to: string, seatNumber: number, tier: string, metadataURI: string): Promise<string> {
@@ -726,6 +763,129 @@ export class Web3Service {
     } catch (error) {
       console.error('❌ Error checking event status:', error);
       return `❌ Failed to check event status: ${error.message}`;
+    }
+  }
+
+  // Get EventFactory address for current network
+  getEventFactoryAddress(): string {
+    const address = CONTRACT_ADDRESSES[this.currentNetwork as keyof typeof CONTRACT_ADDRESSES]?.EVENT_FACTORY;
+    if (!address) {
+      throw new Error(`EventFactory address not found for network: ${this.currentNetwork}`);
+    }
+    return address;
+  }
+
+  // Get user's NFT tickets from all event contracts
+  async getUserNFTTickets(userAddress: string): Promise<any[]> {
+    try {
+      console.log('🔍 Fetching NFT tickets for user:', userAddress);
+      
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      
+      const eventFactoryAddress = this.getEventFactoryAddress();
+      const eventFactory = new ethers.Contract(eventFactoryAddress, EVENT_FACTORY_ABI, this.provider);
+      
+      // Get all events created by the factory
+      const allEvents = await eventFactory.getAllEvents();
+      console.log('📋 Found event contracts:', allEvents.length);
+      
+      const userNFTs: any[] = [];
+      
+      // Check each event contract for user's tickets
+      for (const eventContractAddress of allEvents) {
+        try {
+          const eventContract = new ethers.Contract(eventContractAddress, EVENT_TICKET_ABI, this.provider);
+          
+          // Get user's tickets from this event
+          const userTicketIds = await eventContract.getUserTickets(userAddress);
+          console.log(`🎫 User has ${userTicketIds.length} tickets in event ${eventContractAddress.slice(0, 10)}...`);
+          
+          // Get details for each ticket
+          for (const tokenId of userTicketIds) {
+            try {
+              const ticket = await eventContract.getTicket(tokenId);
+              const eventName = await eventContract.eventName();
+              const eventDate = await eventContract.eventDate();
+              
+              const nftTicket = {
+                tokenId: tokenId.toString(),
+                eventContract: eventContractAddress,
+                eventName: eventName,
+                eventDate: new Date(Number(eventDate) * 1000).toLocaleDateString(),
+                tier: ticket.tier,
+                seatNumber: ticket.seatNumber.toString(),
+                metadataURI: ticket.metadataURI,
+                owner: ticket.owner,
+                purchaseDate: new Date().toLocaleDateString(), // We'll enhance this later
+                network: this.currentNetwork,
+                isNFT: true
+              };
+              
+              userNFTs.push(nftTicket);
+              console.log('🎫 NFT ticket details:', nftTicket);
+              
+            } catch (ticketError) {
+              console.warn(`⚠️ Could not get details for token ${tokenId}:`, ticketError);
+            }
+          }
+          
+        } catch (eventError) {
+          console.warn(`⚠️ Could not access event contract ${eventContractAddress}:`, eventError);
+        }
+      }
+      
+      console.log('🎯 Total NFT tickets found:', userNFTs.length);
+      return userNFTs;
+      
+    } catch (error) {
+      console.error('❌ Error fetching user NFT tickets:', error);
+      throw error;
+    }
+  }
+
+  // Get ticket metadata from blockchain
+  async getTicketMetadata(eventContractAddress: string, tokenId: number): Promise<any> {
+    try {
+      console.log('🔍 Fetching metadata for ticket:', { eventContractAddress, tokenId });
+      
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+      
+      const eventTicketContract = new ethers.Contract(
+        eventContractAddress,
+        EVENT_TICKET_ABI,
+        this.provider
+      );
+      
+      // Get token URI
+      const tokenURI = await eventTicketContract.tokenURI(tokenId);
+      console.log('📋 Token URI:', tokenURI);
+      
+      if (!tokenURI || tokenURI === '') {
+        console.log('⚠️ No token URI found, returning fallback metadata');
+        return {
+          tier: 'Standard',
+          seatNumber: tokenId.toString(),
+          price: '0'
+        };
+      }
+      
+      // Fetch metadata from URI
+      const metadata = await this.fetchMetadata(tokenURI);
+      console.log('✅ Ticket metadata:', metadata);
+      
+      return metadata;
+    } catch (error) {
+      console.error('❌ Error fetching ticket metadata:', error);
+      // Return fallback metadata
+      return {
+        tier: 'Standard',
+        seatNumber: tokenId.toString(),
+        price: '0'
+      };
     }
   }
 }
